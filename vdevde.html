@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>البث المباشر ورفع الفيديوهات للعامة</title>
+    <style>
+        :root {
+            --bg: #f7f9fc;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --accent: #0f766e;
+            --border: #dbe7ee;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            color: var(--text);
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        h2 { color: var(--accent); margin-top: 0; font-size: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input, textarea, button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-top: 4px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        textarea { min-height: 80px; resize: vertical; }
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: var(--muted); cursor: not-allowed; }
+        
+        .cards { display: grid; gap: 16px; }
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            background: #fff;
+        }
+        .pill {
+            display: inline-block;
+            background: #ecfeff;
+            color: #0f766e;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .pill-local {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 10px;
+            background: #000;
+        }
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+            color: #fff;
+            padding: 12px 16px;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .video-overlay .overlay-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+        .video-overlay .overlay-topic {
+            font-size: 13px;
+            color: #38bdf8;
+            font-weight: 600;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+        video {
+            width: 100%;
+            max-height: 360px;
+            border-radius: 8px;
+            background: #000;
+            display: block;
+        }
+
+        .progress {
+            display: none;
+            background: #e2e8f0;
+            border-radius: 8px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s;
+        }
+        .delete-btn { background: #dc2626; margin-top: 8px; }
+        .live-btn { background: #0284c7; margin-top: 8px; }
+        .stop-btn { background: #b91c1c; margin-top: 8px; }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="grid">
+            <!-- 1. قسم إنشاء البث المباشر -->
+            <section class="panel">
+                <h2>🔴 إنشاء بث مباشر جديد</h2>
+                <form id="liveForm">
+                    <label>عنوان البث:
+                        <input id="liveTitle" type="text" placeholder="عنوان البث المباشر..." required>
+                    </label>
+                    <label>الموضوع الرئيسي (يظهر فوق الفيديو):
+                        <input id="liveTopic" type="text" placeholder="مثال: مناقشة المشروع الجديد...">
+                    </label>
+                    <label>الوصف:
+                        <input id="liveDesc" type="text" placeholder="وصف البث...">
+                    </label>
+                    <button type="submit" id="startLiveBtn">بدء البث المباشر الان</button>
+                </form>
+            </section>
+
+            <!-- 2. قسم رفع الفيديوهات -->
+            <section class="panel">
+                <h2>🎬 رفع فيديو جديد للعامة</h2>
+                <form id="videoForm">
+                    <label>عنوان الفيديو:
+                        <input id="videoTitle" type="text" placeholder="عنوان الفيديو..." required>
+                    </label>
+                    <label>الموضوع الرئيسي (يظهر فوق الفيديو):
+                        <input id="videoTopic" type="text" placeholder="مثال: الحلقة الأولى - الشرح الأساسي...">
+                    </label>
+                    <label>الوصف:
+                        <textarea id="videoDesc" placeholder="وصف اختياري..."></textarea>
+                    </label>
+                    <label>اختر ملف الفيديو:
+                        <input id="videoFile" type="file" accept="video/*" required>
+                    </label>
+
+                    <div class="progress" id="progressBox">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div id="statusText" style="margin-bottom: 10px; font-size: 13px; color: var(--muted);"></div>
+
+                    <button type="submit" id="submitBtn">رفع الفيديو للجميع</button>
+                </form>
+            </section>
+        </div>
+
+        <!-- 3. قسم الفيديوهات المحلية المثبتة -->
+        <section class="panel">
+            <h2>📁 الفيديوهات المحلية (مجلد video)</h2>
+            <div class="cards">
+                <div class="card">
+                    <span class="pill pill-local">📁 فيديو محلي</span>
+                    <h3>فيديو 1</h3>
+                    <div class="video-container">
+                        <div class="video-overlay">
+                            <span class="overlay-title">اسم الفيديو:   الامام ابن تيمية 1</span>
+                            <span class="overlay-topic">الموضوع: عرض توضيحي</span>
+                        </div>
+                        <video controls preload="metadata">
+                            <source src="video/1.mp4" type="video/mp4">
+                            <source src="video/1.webm" type="video/webm">
+                            متصفحك لا يدعم تشغيل هذا الفيديو.
+                        </video>
+                    </div>
+                </div>
+                <div class="card">
+                    <span class="pill pill-local">📁 فيديو محلي</span>
+                    <h3>فيديو 2</h3>
+                    <div class="video-container">
+                        <div class="video-overlay">
+                            <span class="overlay-title">اسم الفيديو: فيديو محلي 2</span>
+                            <span class="overlay-topic">الموضوع: مراجعة شامله</span>
+                        </div>
+                        <video controls preload="metadata">
+                            <source src="video/2.mp4" type="video/mp4">
+                            <source src="video/2.webm" type="video/webm">
+                            متصفحك لا يدعم تشغيل هذا الفيديو.
+                        </video>
+                    </div>
+                </div>
+                <div class="card">
+                    <span class="pill pill-local">📁 فيديو محلي</span>
+                    <h3>فيديو 3</h3>
+                    <div class="video-container">
+                        <div class="video-overlay">
+                            <span class="overlay-title">اسم الفيديو: فيديو محلي 3</span>
+                            <span class="overlay-topic">الموضوع: ملخص عام</span>
+                        </div>
+                        <video controls preload="metadata">
+                            <source src="video/3.mp4" type="video/mp4">
+                            <source src="video/3.webm" type="video/webm">
+                            متصفحك لا يدعم تشغيل هذا الفيديو.
+                        </video>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. قسم المحتوى المنشور للعامة -->
+        <section class="panel">
+            <h2>📚 المحتوى المنشور للعامة (بث مباشر / فيديوهات مرفوعة)</h2>
+            <div id="contentList" class="cards">
+                <div>جارٍ تحميل المحتوى...</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Firebase SDK (Firestore + Storage) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+    <script>
+        // إعدادات Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBp7gZ7bbabIGrokehXeZH9OaNqs6-tEZY",
+            authDomain: "medad-ezikr.firebaseapp.com",
+            projectId: "medad-ezikr",
+            storageBucket: "medad-ezikr.appspot.com",
+            messagingSenderId: "235096064459",
+            appId: "1:235096064459:web:2e6bae4c2e8c604f14b64e"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+        const COLLECTION = 'media_items';
+
+        // سيرفرات STUN لتبادل الـ IP
+        const rtcServers = {
+            iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+        };
+
+        let localStream = null;
+        let peerConnections = {}; // تخزين الاتصالات مع كل مشاهد بشكل منفصل
+        let currentLiveId = null;
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function requireOwnerPassword(action) {
+            const entered = prompt(`أدخل كلمة السر لـ ${action}:`);
+            return entered === '3092004';
+        }
+
+        // --- أولاً: البث المباشر عبر WebRTC (طرف المضيف) ---
+        document.getElementById('liveForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!requireOwnerPassword('بدء البث المباشر')) return;
+
+            const title = document.getElementById('liveTitle').value.trim();
+            const topic = document.getElementById('liveTopic').value.trim();
+            const description = document.getElementById('liveDesc').value.trim();
+
+            try {
+                // الحصول على الكاميرا والميكروفون
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                
+                const itemId = db.collection(COLLECTION).doc().id;
+                currentLiveId = itemId;
+
+                // إنشاء مستند البث الرئيسي
+                await db.collection(COLLECTION).doc(itemId).set({
+                    id: itemId,
+                    type: 'live',
+                    title: title,
+                    topic: topic,
+                    description: description,
+                    streamActive: true,
+                    createdAt: new Date().toLocaleString('ar-EG'),
+                    createdAtMs: Date.now()
+                });
+
+                // الاستماع للمشاهدين المنضمين للبث
+                listenForViewers(itemId);
+
+                alert('تم بدء البث المباشر بنجاح! يمكنك الآن رؤية الفيديو عند مشاهدين آخرين.');
+                e.target.reset();
+            } catch (err) {
+                console.error(err);
+                alert('عذراً، يرجى السماح بالوصول للكاميرا والميكروفون لتشغيل البث.');
+            }
+        });
+
+        // استماع المضيف للمشاهدين وإجراء المصافحة (Handshake) لكل مشاهد
+        function listenForViewers(streamId) {
+            const viewersRef = db.collection(COLLECTION).doc(streamId).collection('viewers');
+
+            viewersRef.onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(async change => {
+                    if (change.type === 'added') {
+                        const viewerId = change.doc.id;
+                        const viewerData = change.doc.data();
+
+                        // إذا كان هناك Offer من المشاهد
+                        if (viewerData.offer) {
+                            const pc = new RTCPeerConnection(rtcServers);
+                            peerConnections[viewerId] = pc;
+
+                            // إضافة المسارات الصوتية والصورية
+                            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                            // إرسال ICE Candidates للمشاهد
+                            pc.onicecandidate = (event) => {
+                                if (event.candidate) {
+                                    viewersRef.doc(viewerId).collection('hostCandidates').add(event.candidate.toJSON());
+                                }
+                            };
+
+                            // ضبط الوصف البعيد وإنشاء Answer
+                            await pc.setRemoteDescription(new RTCSessionDescription(viewerData.offer));
+                            const answer = await pc.createAnswer();
+                            await pc.setLocalDescription(answer);
+
+                            await viewersRef.doc(viewerId).update({
+                                answer: { type: answer.type, sdp: answer.sdp }
+                            });
+
+                            // الاستماع لـ Candidate القادمة من المشاهد
+                            viewersRef.doc(viewerId).collection('viewerCandidates').onSnapshot(candSnap => {
+                                candSnap.docChanges().forEach(cChange => {
+                                    if (cChange.type === 'added') {
+                                        pc.addIceCandidate(new RTCIceCandidate(cChange.doc.data()));
+                                    }
+                                });
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        // --- الانضمام للبث المباشر (طرف المشاهد) ---
+        async function joinLiveStream(streamId) {
+            try {
+                const viewerId = db.collection('tmp').doc().id; // إنشاء معرّف عشوائي للمشاهد
+                const viewerDoc = db.collection(COLLECTION).doc(streamId).collection('viewers').doc(viewerId);
+                const pc = new RTCPeerConnection(rtcServers);
+
+                // استقبال بث الفيديو وتوجيهه للعنصر
+                pc.ontrack = (event) => {
+                    const videoElem = document.getElementById(`live-video-${streamId}`);
+                    if (videoElem && event.streams[0]) {
+                        videoElem.srcObject = event.streams[0];
+                        videoElem.play().catch(e => console.log("Autoplay caught:", e));
+                    }
+                };
+
+                // إرسال ICE Candidates للمضيف
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        viewerDoc.collection('viewerCandidates').add(event.candidate.toJSON());
+                    }
+                };
+
+                // إنشاء Offer من المشاهد للمضيف
+                const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
+                await pc.setLocalDescription(offer);
+
+                await viewerDoc.set({
+                    offer: { type: offer.type, sdp: offer.sdp }
+                });
+
+                // الاستماع لـ Answer القادمة من المضيف
+                viewerDoc.onSnapshot(async snapshot => {
+                    const data = snapshot.data();
+                    if (data && data.answer && !pc.currentRemoteDescription) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
+                });
+
+                // الاستماع لـ Candidate القادمة من المضيف
+                viewerDoc.collection('hostCandidates').onSnapshot(candSnap => {
+                    candSnap.docChanges().forEach(change => {
+                        if (change.type === 'added') {
+                            pc.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+                        }
+                    });
+                });
+
+            } catch (err) {
+                console.error("خطأ الاتصال بالبث:", err);
+            }
+        }
+
+        async function stopLiveStream(itemId) {
+            if (!requireOwnerPassword('إنهاء البث')) return;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            Object.values(peerConnections).forEach(pc => pc.close());
+            peerConnections = {};
+
+            await db.collection(COLLECTION).doc(itemId).update({ streamActive: false });
+            alert('تم إنهاء البث المباشر.');
+        }
+
+        // --- ثانياً: رفع الفيديوهات عبر Firebase Storage المباشر ---
+        document.getElementById('videoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!requireOwnerPassword('رفع فيديو')) return;
+
+            const title = document.getElementById('videoTitle').value.trim();
+            const topic = document.getElementById('videoTopic').value.trim();
+            const desc = document.getElementById('videoDesc').value.trim();
+            const file = document.getElementById('videoFile').files[0];
+
+            if (!file) return;
+
+            const submitBtn = document.getElementById('submitBtn');
+            const progressBox = document.getElementById('progressBox');
+            const progressBar = document.getElementById('progressBar');
+            const statusText = document.getElementById('statusText');
+
+            submitBtn.disabled = true;
+            progressBox.style.display = 'block';
+            statusText.textContent = 'جارٍ بدء الرفع...';
+
+            const fileRef = storage.ref(`videos/${Date.now()}_${file.name}`);
+            const uploadTask = fileRef.put(file);
+
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                    progressBar.style.width = percent + '%';
+                    statusText.textContent = `تم رفع ${percent}% من الفيديو...`;
+                }, 
+                (error) => {
+                    console.error("Upload Error:", error);
+                    alert('حدث خطأ أثناء الرفع، تأكد من إعدادات القواعد (Rules) في Firebase Storage.');
+                    resetUploadState();
+                }, 
+                async () => {
+                    try {
+                        const videoUrl = await uploadTask.snapshot.ref.getDownloadURL();
+
+                        await db.collection(COLLECTION).add({
+                            title: title,
+                            topic: topic,
+                            description: desc,
+                            videoUrl: videoUrl,
+                            type: 'video',
+                            createdAt: new Date().toLocaleString('ar-EG'),
+                            createdAtMs: Date.now()
+                        });
+
+                        alert('تم رفع الفيديو بنجاح وظهر للعامة!');
+                        document.getElementById('videoForm').reset();
+                    } catch (err) {
+                        alert('تم رفع الملف لكن حدث خطأ أثناء حفظ البيانات.');
+                    }
+                    resetUploadState();
+                }
+            );
+
+            function resetUploadState() {
+                submitBtn.disabled = false;
+                progressBox.style.display = 'none';
+                progressBar.style.width = '0%';
+                statusText.textContent = '';
+            }
+        });
+
+        // --- ثالثاً: الاستماع والعرض المباشر للجميع ---
+        db.collection(COLLECTION).orderBy('createdAtMs', 'desc').onSnapshot((snapshot) => {
+            const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderContent(items);
+        });
+
+        function renderContent(items) {
+            const list = document.getElementById('contentList');
+            if (!items.length) {
+                list.innerHTML = '<div>لا يوجد محتوى أونلاين منشور حالياً.</div>';
+                return;
+            }
+
+            list.innerHTML = items.map(item => `
+                <div class="card">
+                    <span class="pill">${item.type === 'live' ? '🔴 بث مباشر' : '🎬 فيديو أونلاين'}</span>
+                    <h3>${escapeHtml(item.title)}</h3>
+                    <p>${escapeHtml(item.description || 'لا يوجد وصف')}</p>
+                    <small>تاريخ النشر: ${escapeHtml(item.createdAt)}</small>
+                    
+                    <div class="video-container">
+                        <div class="video-overlay">
+                            <span class="overlay-title">📹 ${escapeHtml(item.title)}</span>
+                            ${item.topic ? `<span class="overlay-topic">📌 الموضوع: ${escapeHtml(item.topic)}</span>` : ''}
+                        </div>
+
+                        ${item.type === 'live' ? `
+                            ${item.streamActive ? `
+                                <video id="live-video-${item.id}" autoplay playsinline controls muted></video>
+                            ` : '<div style="padding: 20px; color: var(--muted); text-align: center;">تم إنهاء هذا البث.</div>'}
+                        ` : `
+                            <video controls preload="metadata" src="${escapeHtml(item.videoUrl)}"></video>
+                        `}
+                    </div>
+
+                    ${item.type === 'live' && item.streamActive ? `
+                        <button class="live-btn" onclick="joinLiveStream('${item.id}')">📺 مشاهدة البث الان</button>
+                        <button class="stop-btn" onclick="stopLiveStream('${item.id}')">⏹️ إنهاء البث</button>
+                    ` : ''}
+
+                    <button class="delete-btn" onclick="deleteItem('${item.id}', '${item.videoUrl || ''}')">🗑️ حذف</button>
+                </div>
+            `).join('');
+        }
+
+        async function deleteItem(id, videoUrl) {
+            if (!requireOwnerPassword('الحذف')) return;
+            if (confirm('هل تريد الحذف بالتأكيد؟')) {
+                await db.collection(COLLECTION).doc(id).delete();
+                if (videoUrl) {
+                    try {
+                        const fileRef = storage.refFromURL(videoUrl);
+                        await fileRef.delete();
+                    } catch (e) {
+                        console.log("لم يتم إيجاد الملف بالملفات أو تم حذفه مسبقاً.");
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
