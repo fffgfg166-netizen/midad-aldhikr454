@@ -12,6 +12,7 @@
             --muted: #6b7280;
             --accent: #0f766e;
             --border: #dbe7ee;
+            --like-color: #e11d48;
         }
         * { box-sizing: border-box; }
         body {
@@ -50,7 +51,7 @@
             font-size: 14px;
             font-family: inherit;
         }
-        textarea { min-height: 80px; resize: vertical; }
+        textarea { min-height: 90px; resize: vertical; }
         button {
             background: var(--accent);
             color: white;
@@ -68,6 +69,8 @@
             border-radius: 12px;
             padding: 16px;
             background: #fff;
+            position: relative;
+            z-index: 1;
         }
         .pill {
             display: inline-block;
@@ -91,6 +94,7 @@
             overflow: hidden;
             margin-top: 10px;
             background: #000;
+            z-index: 1;
         }
         .video-overlay {
             position: absolute;
@@ -100,7 +104,7 @@
             background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
             color: #fff;
             padding: 12px 16px;
-            z-index: 10;
+            z-index: 2;
             pointer-events: none;
             display: flex;
             flex-direction: column;
@@ -124,6 +128,8 @@
             border-radius: 8px;
             background: #000;
             display: block;
+            position: relative;
+            z-index: 1;
         }
 
         .progress {
@@ -143,9 +149,200 @@
         .delete-btn { background: #dc2626; margin-top: 8px; }
         .live-btn { background: #0284c7; margin-top: 8px; }
         .stop-btn { background: #b91c1c; margin-top: 8px; }
+
+        /* شارة المطور للمالك */
+        .developer-badge {
+            background: #0f766e;
+            color: #ffffff;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 6px;
+        }
+
+        /* زر الإعجاب والشريط السفلي */
+        .post-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+        }
+        .like-btn-main {
+            width: auto;
+            margin: 0;
+            padding: 8px 16px;
+            background: #ffe4e6;
+            color: var(--like-color);
+            border: 1px solid #fecdd3;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .like-btn-main:hover {
+            background: #fecdd3;
+        }
+
+        /* قسم التعليقات والردود */
+        .comments-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border);
+            position: relative;
+            z-index: 5;
+        }
+        .comments-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+        .comments-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .comment-item {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+        }
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .comment-author {
+            font-weight: bold;
+            color: #0f766e;
+        }
+        .comment-time {
+            font-size: 11px;
+            color: var(--muted);
+        }
+        .comment-text {
+            color: var(--text);
+            word-break: break-word;
+            margin-bottom: 8px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .comment-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 12px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 6px;
+            margin-top: 6px;
+        }
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--muted);
+            padding: 0;
+            margin: 0;
+            width: auto;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .action-btn:hover {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+        .delete-comment-btn {
+            color: #dc2626 !important;
+            margin-right: auto;
+        }
         
+        /* قسم الردود الفرعية */
+        .replies-list {
+            margin-top: 10px;
+            margin-right: 12px;
+            border-right: 3px solid var(--border);
+            padding-right: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .reply-item {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        /* نماذج إدخال التعليق والرد */
+        .comment-form {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            z-index: 10;
+        }
+        .comment-form input, 
+        .comment-form textarea {
+            margin: 0;
+            font-size: 14px;
+            width: 100%;
+        }
+        .comment-form button {
+            margin: 0;
+            padding: 10px 18px;
+            white-space: nowrap;
+            width: auto;
+            align-self: flex-end;
+        }
+        
+        .reply-form {
+            display: none;
+            flex-direction: column;
+            margin-top: 10px;
+            gap: 8px;
+            background: #f8fafc;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .reply-form input,
+        .reply-form textarea { 
+            margin: 0; 
+            padding: 10px; 
+            font-size: 13px; 
+            width: 100%;
+            border-radius: 6px;
+        }
+        .reply-form textarea {
+            min-height: 70px;
+        }
+        .reply-form button { 
+            margin: 0; 
+            padding: 8px 16px; 
+            font-size: 13px; 
+            width: auto;
+            align-self: flex-end;
+        }
+
         @media (max-width: 768px) {
             .grid { grid-template-columns: 1fr; }
+            .comment-form button, .reply-form button { width: 100%; }
         }
     </style>
 </head>
@@ -165,7 +362,7 @@
                     <label>الوصف:
                         <input id="liveDesc" type="text" placeholder="وصف البث...">
                     </label>
-                    <button type="submit" id="startLiveBtn">بدء البث المباشر الان</button>
+                    <button type="submit" id="startLiveBtn">بدء البث المباشر الآن</button>
                 </form>
             </section>
 
@@ -200,12 +397,13 @@
         <section class="panel">
             <h2>📁 الفيديوهات المحلية (مجلد video)</h2>
             <div class="cards">
-                <div class="card">
+                <!-- فيديو محلي 1 -->
+                <div class="card" id="card-local-1">
                     <span class="pill pill-local">📁 فيديو محلي</span>
                     <h3>فيديو 1</h3>
                     <div class="video-container">
                         <div class="video-overlay">
-                            <span class="overlay-title">اسم الفيديو:   الامام ابن تيمية 1</span>
+                            <span class="overlay-title">اسم الفيديو: فيديو محلي 1</span>
                             <span class="overlay-topic">الموضوع: عرض توضيحي</span>
                         </div>
                         <video controls preload="metadata">
@@ -214,14 +412,32 @@
                             متصفحك لا يدعم تشغيل هذا الفيديو.
                         </video>
                     </div>
+                    <div class="post-actions">
+                        <button class="like-btn-main" onclick="likePost('local_video_1')">
+                            ❤️ إعجاب (<span id="likes-local_video_1">0</span>)
+                        </button>
+                    </div>
+                    <div class="comments-section">
+                        <div class="comments-title">💬 التعليقات والمحادثة المباشرة:</div>
+                        <div class="comments-list" id="comments-list-local_video_1">
+                            <div style="font-size: 12px; color: var(--muted);">جارٍ تحميل التعليقات...</div>
+                        </div>
+                        <form class="comment-form" onsubmit="addComment(event, 'local_video_1')">
+                            <input type="text" id="comment-author-local_video_1" placeholder="اسمك..." required>
+                            <textarea id="comment-text-local_video_1" placeholder="اكتب تعليقك هنا..." required></textarea>
+                            <button type="submit">إرسال التعليق</button>
+                        </form>
+                    </div>
                 </div>
-                <div class="card">
+
+                <!-- فيديو محلي 2 -->
+                <div class="card" id="card-local-2">
                     <span class="pill pill-local">📁 فيديو محلي</span>
                     <h3>فيديو 2</h3>
                     <div class="video-container">
                         <div class="video-overlay">
                             <span class="overlay-title">اسم الفيديو: فيديو محلي 2</span>
-                            <span class="overlay-topic">الموضوع: مراجعة شامله</span>
+                            <span class="overlay-topic">الموضوع: مراجعة شاملة</span>
                         </div>
                         <video controls preload="metadata">
                             <source src="video/2.mp4" type="video/mp4">
@@ -229,8 +445,26 @@
                             متصفحك لا يدعم تشغيل هذا الفيديو.
                         </video>
                     </div>
+                    <div class="post-actions">
+                        <button class="like-btn-main" onclick="likePost('local_video_2')">
+                            ❤️ إعجاب (<span id="likes-local_video_2">0</span>)
+                        </button>
+                    </div>
+                    <div class="comments-section">
+                        <div class="comments-title">💬 التعليقات والمحادثة المباشرة:</div>
+                        <div class="comments-list" id="comments-list-local_video_2">
+                            <div style="font-size: 12px; color: var(--muted);">جارٍ تحميل التعليقات...</div>
+                        </div>
+                        <form class="comment-form" onsubmit="addComment(event, 'local_video_2')">
+                            <input type="text" id="comment-author-local_video_2" placeholder="اسمك..." required>
+                            <textarea id="comment-text-local_video_2" placeholder="اكتب تعليقك هنا..." required></textarea>
+                            <button type="submit">إرسال التعليق</button>
+                        </form>
+                    </div>
                 </div>
-                <div class="card">
+
+                <!-- فيديو محلي 3 -->
+                <div class="card" id="card-local-3">
                     <span class="pill pill-local">📁 فيديو محلي</span>
                     <h3>فيديو 3</h3>
                     <div class="video-container">
@@ -243,6 +477,22 @@
                             <source src="video/3.webm" type="video/webm">
                             متصفحك لا يدعم تشغيل هذا الفيديو.
                         </video>
+                    </div>
+                    <div class="post-actions">
+                        <button class="like-btn-main" onclick="likePost('local_video_3')">
+                            ❤️ إعجاب (<span id="likes-local_video_3">0</span>)
+                        </button>
+                    </div>
+                    <div class="comments-section">
+                        <div class="comments-title">💬 التعليقات والمحادثة المباشرة:</div>
+                        <div class="comments-list" id="comments-list-local_video_3">
+                            <div style="font-size: 12px; color: var(--muted);">جارٍ تحميل التعليقات...</div>
+                        </div>
+                        <form class="comment-form" onsubmit="addComment(event, 'local_video_3')">
+                            <input type="text" id="comment-author-local_video_3" placeholder="اسمك..." required>
+                            <textarea id="comment-text-local_video_3" placeholder="اكتب تعليقك هنا..." required></textarea>
+                            <button type="submit">إرسال التعليق</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -257,7 +507,7 @@
         </section>
     </div>
 
-    <!-- Firebase SDK (Firestore + Storage) -->
+    <!-- Firebase SDK (Version 10.12.0) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
@@ -278,14 +528,15 @@
         const storage = firebase.storage();
         const COLLECTION = 'media_items';
 
-        // سيرفرات STUN لتبادل الـ IP
         const rtcServers = {
             iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
         };
 
         let localStream = null;
-        let peerConnections = {}; // تخزين الاتصالات مع كل مشاهد بشكل منفصل
+        let peerConnections = {}; 
         let currentLiveId = null;
+        let activeCommentListeners = {};
+        let activeReplyListeners = {};
 
         function escapeHtml(value) {
             return String(value || '')
@@ -296,9 +547,25 @@
                 .replace(/'/g, '&#39;');
         }
 
+        // دالة التحقق من المطور/المالك عبر كلمة السر
         function requireOwnerPassword(action) {
             const entered = prompt(`أدخل كلمة السر لـ ${action}:`);
             return entered === '3092004';
+        }
+
+        // دالة التحقق من الاسم وإرجاع الاسم المناسب
+        function resolveAuthorName(inputName) {
+            const trimmed = inputName.trim();
+            if (trimmed.includes("المطور") || trimmed.includes("مطور") || trimmed.toLowerCase() === "developer") {
+                const pass = prompt("لقد اخترت كتابة اسم (المطور). أدخل كلمة سر المالك للتوثيق:");
+                if (pass === '3092004') {
+                    return { name: "المطور", isDev: true };
+                } else {
+                    alert("كلمة السر خاطئة! تم تسجيل الاسم كـ (زائر عادي).");
+                    return { name: "زائر", isDev: false };
+                }
+            }
+            return { name: trimmed, isDev: false };
         }
 
         // --- أولاً: البث المباشر عبر WebRTC (طرف المضيف) ---
@@ -311,13 +578,11 @@
             const description = document.getElementById('liveDesc').value.trim();
 
             try {
-                // الحصول على الكاميرا والميكروفون
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 
                 const itemId = db.collection(COLLECTION).doc().id;
                 currentLiveId = itemId;
 
-                // إنشاء مستند البث الرئيسي
                 await db.collection(COLLECTION).doc(itemId).set({
                     id: itemId,
                     type: 'live',
@@ -325,22 +590,21 @@
                     topic: topic,
                     description: description,
                     streamActive: true,
+                    likesCount: 0,
                     createdAt: new Date().toLocaleString('ar-EG'),
                     createdAtMs: Date.now()
                 });
 
-                // الاستماع للمشاهدين المنضمين للبث
                 listenForViewers(itemId);
 
-                alert('تم بدء البث المباشر بنجاح! يمكنك الآن رؤية الفيديو عند مشاهدين آخرين.');
+                alert('تم بدء البث المباشر بنجاح!');
                 e.target.reset();
             } catch (err) {
                 console.error(err);
-                alert('عذراً، يرجى السماح بالوصول للكاميرا والميكروفون لتشغيل البث.');
+                alert('يرجى السماح بالوصول للكاميرا والميكروفون لتشغيل البث.');
             }
         });
 
-        // استماع المضيف للمشاهدين وإجراء المصافحة (Handshake) لكل مشاهد
         function listenForViewers(streamId) {
             const viewersRef = db.collection(COLLECTION).doc(streamId).collection('viewers');
 
@@ -350,22 +614,18 @@
                         const viewerId = change.doc.id;
                         const viewerData = change.doc.data();
 
-                        // إذا كان هناك Offer من المشاهد
                         if (viewerData.offer) {
                             const pc = new RTCPeerConnection(rtcServers);
                             peerConnections[viewerId] = pc;
 
-                            // إضافة المسارات الصوتية والصورية
                             localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-                            // إرسال ICE Candidates للمشاهد
                             pc.onicecandidate = (event) => {
                                 if (event.candidate) {
                                     viewersRef.doc(viewerId).collection('hostCandidates').add(event.candidate.toJSON());
                                 }
                             };
 
-                            // ضبط الوصف البعيد وإنشاء Answer
                             await pc.setRemoteDescription(new RTCSessionDescription(viewerData.offer));
                             const answer = await pc.createAnswer();
                             await pc.setLocalDescription(answer);
@@ -374,7 +634,6 @@
                                 answer: { type: answer.type, sdp: answer.sdp }
                             });
 
-                            // الاستماع لـ Candidate القادمة من المشاهد
                             viewersRef.doc(viewerId).collection('viewerCandidates').onSnapshot(candSnap => {
                                 candSnap.docChanges().forEach(cChange => {
                                     if (cChange.type === 'added') {
@@ -391,27 +650,24 @@
         // --- الانضمام للبث المباشر (طرف المشاهد) ---
         async function joinLiveStream(streamId) {
             try {
-                const viewerId = db.collection('tmp').doc().id; // إنشاء معرّف عشوائي للمشاهد
+                const viewerId = db.collection('tmp').doc().id; 
                 const viewerDoc = db.collection(COLLECTION).doc(streamId).collection('viewers').doc(viewerId);
                 const pc = new RTCPeerConnection(rtcServers);
 
-                // استقبال بث الفيديو وتوجيهه للعنصر
                 pc.ontrack = (event) => {
                     const videoElem = document.getElementById(`live-video-${streamId}`);
                     if (videoElem && event.streams[0]) {
                         videoElem.srcObject = event.streams[0];
-                        videoElem.play().catch(e => console.log("Autoplay caught:", e));
+                        videoElem.play().catch(e => console.log("Autoplay issue:", e));
                     }
                 };
 
-                // إرسال ICE Candidates للمضيف
                 pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         viewerDoc.collection('viewerCandidates').add(event.candidate.toJSON());
                     }
                 };
 
-                // إنشاء Offer من المشاهد للمضيف
                 const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
                 await pc.setLocalDescription(offer);
 
@@ -419,7 +675,6 @@
                     offer: { type: offer.type, sdp: offer.sdp }
                 });
 
-                // الاستماع لـ Answer القادمة من المضيف
                 viewerDoc.onSnapshot(async snapshot => {
                     const data = snapshot.data();
                     if (data && data.answer && !pc.currentRemoteDescription) {
@@ -427,7 +682,6 @@
                     }
                 });
 
-                // الاستماع لـ Candidate القادمة من المضيف
                 viewerDoc.collection('hostCandidates').onSnapshot(candSnap => {
                     candSnap.docChanges().forEach(change => {
                         if (change.type === 'added') {
@@ -437,7 +691,7 @@
                 });
 
             } catch (err) {
-                console.error("خطأ الاتصال بالبث:", err);
+                console.error("خطأ أثناء الاتصال بالبث:", err);
             }
         }
 
@@ -455,7 +709,7 @@
             alert('تم إنهاء البث المباشر.');
         }
 
-        // --- ثانياً: رفع الفيديوهات عبر Firebase Storage المباشر ---
+        // --- ثانياً: رفع الفيديوهات عبر Firebase Storage ---
         document.getElementById('videoForm').addEventListener('submit', function(e) {
             e.preventDefault();
             if (!requireOwnerPassword('رفع فيديو')) return;
@@ -487,7 +741,7 @@
                 }, 
                 (error) => {
                     console.error("Upload Error:", error);
-                    alert('حدث خطأ أثناء الرفع، تأكد من إعدادات القواعد (Rules) في Firebase Storage.');
+                    alert('حدث خطأ أثناء الرفع، تأكد من إعدادات الصلاحيات.');
                     resetUploadState();
                 }, 
                 async () => {
@@ -500,6 +754,7 @@
                             description: desc,
                             videoUrl: videoUrl,
                             type: 'video',
+                            likesCount: 0,
                             createdAt: new Date().toLocaleString('ar-EG'),
                             createdAtMs: Date.now()
                         });
@@ -507,7 +762,7 @@
                         alert('تم رفع الفيديو بنجاح وظهر للعامة!');
                         document.getElementById('videoForm').reset();
                     } catch (err) {
-                        alert('تم رفع الملف لكن حدث خطأ أثناء حفظ البيانات.');
+                        alert('تم رفع الملف ولكن حدث خطأ أثناء حفظ التوصيف.');
                     }
                     resetUploadState();
                 }
@@ -521,7 +776,30 @@
             }
         });
 
-        // --- ثالثاً: الاستماع والعرض المباشر للجميع ---
+        // --- إضافة الإعجابات للمنشورات (تستوعب المحتوى المرفوع والمحلي) ---
+        async function likePost(itemId) {
+            if (itemId.startsWith('local_video_')) {
+                const countElem = document.getElementById(`likes-${itemId}`);
+                if (countElem) {
+                    countElem.textContent = parseInt(countElem.textContent || 0) + 1;
+                }
+                return;
+            }
+
+            const docRef = db.collection(COLLECTION).doc(itemId);
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const doc = await transaction.get(docRef);
+                    if (!doc.exists) return;
+                    const newLikes = (doc.data().likesCount || 0) + 1;
+                    transaction.update(docRef, { likesCount: newLikes });
+                });
+            } catch (err) {
+                console.error("Like error:", err);
+            }
+        }
+
+        // --- ثالثاً: الاستماع والتحديث المباشر للمحتوى الأونلاين ---
         db.collection(COLLECTION).orderBy('createdAtMs', 'desc').onSnapshot((snapshot) => {
             const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderContent(items);
@@ -535,7 +813,7 @@
             }
 
             list.innerHTML = items.map(item => `
-                <div class="card">
+                <div class="card" id="card-${item.id}">
                     <span class="pill">${item.type === 'live' ? '🔴 بث مباشر' : '🎬 فيديو أونلاين'}</span>
                     <h3>${escapeHtml(item.title)}</h3>
                     <p>${escapeHtml(item.description || 'لا يوجد وصف')}</p>
@@ -557,29 +835,199 @@
                     </div>
 
                     ${item.type === 'live' && item.streamActive ? `
-                        <button class="live-btn" onclick="joinLiveStream('${item.id}')">📺 مشاهدة البث الان</button>
+                        <button class="live-btn" onclick="joinLiveStream('${item.id}')">📺 مشاهدة البث الآن</button>
                         <button class="stop-btn" onclick="stopLiveStream('${item.id}')">⏹️ إنهاء البث</button>
                     ` : ''}
 
-                    <button class="delete-btn" onclick="deleteItem('${item.id}', '${item.videoUrl || ''}')">🗑️ حذف</button>
+                    <div class="post-actions">
+                        <button class="like-btn-main" onclick="likePost('${item.id}')">
+                            ❤️ إعجاب (${item.likesCount || 0})
+                        </button>
+                    </div>
+
+                    <div class="comments-section">
+                        <div class="comments-title">💬 التعليقات والمحادثة المباشرة:</div>
+                        <div class="comments-list" id="comments-list-${item.id}">
+                            <div style="font-size: 12px; color: var(--muted);">جارٍ تحميل التعليقات...</div>
+                        </div>
+                        
+                        <form class="comment-form" onsubmit="addComment(event, '${item.id}')">
+                            <input type="text" id="comment-author-${item.id}" placeholder="اسمك..." required>
+                            <textarea id="comment-text-${item.id}" placeholder="اكتب تعليقك هنا..." required></textarea>
+                            <button type="submit">إرسال التعليق</button>
+                        </form>
+                    </div>
                 </div>
             `).join('');
+
+            items.forEach(item => listenToComments(item.id));
         }
 
-        async function deleteItem(id, videoUrl) {
-            if (!requireOwnerPassword('الحذف')) return;
-            if (confirm('هل تريد الحذف بالتأكيد؟')) {
-                await db.collection(COLLECTION).doc(id).delete();
-                if (videoUrl) {
-                    try {
-                        const fileRef = storage.refFromURL(videoUrl);
-                        await fileRef.delete();
-                    } catch (e) {
-                        console.log("لم يتم إيجاد الملف بالملفات أو تم حذفه مسبقاً.");
+        // --- رابعاً: إدارة التعليقات والردود الفرعية ---
+        function listenToComments(itemId) {
+            if (activeCommentListeners[itemId]) return;
+
+            activeCommentListeners[itemId] = db.collection(COLLECTION)
+                .doc(itemId)
+                .collection('comments')
+                .orderBy('createdAtMs', 'asc')
+                .onSnapshot(snapshot => {
+                    const commentsContainer = document.getElementById(`comments-list-${itemId}`);
+                    if (!commentsContainer) return;
+
+                    if (snapshot.empty) {
+                        commentsContainer.innerHTML = '<div style="font-size: 12px; color: var(--muted);">لا توجد تعليقات بعد. كن أول من يعلق!</div>';
+                        return;
                     }
-                }
+
+                    commentsContainer.innerHTML = snapshot.docs.map(doc => {
+                        const comment = doc.data();
+                        const commentId = doc.id;
+                        return `
+                            <div class="comment-item" id="comment-${commentId}">
+                                <div class="comment-header">
+                                    <span class="comment-author">
+                                        ${comment.isDev ? '<span class="developer-badge">مالك الموقع</span>' : ''}
+                                        ${escapeHtml(comment.author)}
+                                    </span>
+                                    <span class="comment-time">${escapeHtml(comment.createdAt || '')}</span>
+                                </div>
+                                <div class="comment-text">${escapeHtml(comment.text)}</div>
+                                <div class="comment-actions">
+                                    <button class="action-btn" onclick="toggleReplyForm('${itemId}', '${commentId}')">💬 رد</button>
+                                    <button class="action-btn delete-comment-btn" onclick="deleteComment('${itemId}', '${commentId}')">🗑️ حذف</button>
+                                </div>
+
+                                <div class="replies-list" id="replies-list-${commentId}"></div>
+
+                                <form class="reply-form" id="reply-form-${commentId}" onsubmit="addReply(event, '${itemId}', '${commentId}')">
+                                    <input type="text" id="reply-author-${commentId}" placeholder="اسمك..." required>
+                                    <textarea id="reply-text-${commentId}" placeholder="اكتب ردك..." required></textarea>
+                                    <button type="submit">إرسال الرد</button>
+                                </form>
+                            </div>
+                        `;
+                    }).join('');
+
+                    snapshot.docs.forEach(doc => listenToReplies(itemId, doc.id));
+                });
+        }
+
+        function listenToReplies(itemId, commentId) {
+            if (activeReplyListeners[commentId]) return;
+
+            activeReplyListeners[commentId] = db.collection(COLLECTION)
+                .doc(itemId)
+                .collection('comments')
+                .doc(commentId)
+                .collection('replies')
+                .orderBy('createdAtMs', 'asc')
+                .onSnapshot(snapshot => {
+                    const repliesContainer = document.getElementById(`replies-list-${commentId}`);
+                    if (!repliesContainer) return;
+
+                    if (snapshot.empty) {
+                        repliesContainer.innerHTML = '';
+                        return;
+                    }
+
+                    repliesContainer.innerHTML = snapshot.docs.map(doc => {
+                        const reply = doc.data();
+                        return `
+                            <div class="reply-item">
+                                <div class="comment-header">
+                                    <span class="comment-author">
+                                        ${reply.isDev ? '<span class="developer-badge">مالك الموقع</span>' : ''}
+                                        ${escapeHtml(reply.author)}
+                                    </span>
+                                    <span class="comment-time">${escapeHtml(reply.createdAt || '')}</span>
+                                </div>
+                                <div class="comment-text">${escapeHtml(reply.text)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                });
+        }
+
+        async function addComment(e, itemId) {
+            e.preventDefault();
+            const authorInput = document.getElementById(`comment-author-${itemId}`);
+            const textInput = document.getElementById(`comment-text-${itemId}`);
+
+            const rawAuthor = authorInput.value;
+            const text = textInput.value.trim();
+
+            if (!text || !rawAuthor) return;
+
+            const authorData = resolveAuthorName(rawAuthor);
+
+            await db.collection(COLLECTION)
+                .doc(itemId)
+                .collection('comments')
+                .add({
+                    author: authorData.name,
+                    isDev: authorData.isDev,
+                    text: text,
+                    createdAt: new Date().toLocaleString('ar-EG'),
+                    createdAtMs: Date.now()
+                });
+
+            textInput.value = '';
+        }
+
+        function toggleReplyForm(itemId, commentId) {
+            const form = document.getElementById(`reply-form-${commentId}`);
+            if (form) {
+                form.style.display = (form.style.display === 'flex') ? 'none' : 'flex';
             }
         }
+
+        async function addReply(e, itemId, commentId) {
+            e.preventDefault();
+            const authorInput = document.getElementById(`reply-author-${commentId}`);
+            const textInput = document.getElementById(`reply-text-${commentId}`);
+
+            const rawAuthor = authorInput.value;
+            const text = textInput.value.trim();
+
+            if (!text || !rawAuthor) return;
+
+            const authorData = resolveAuthorName(rawAuthor);
+
+            await db.collection(COLLECTION)
+                .doc(itemId)
+                .collection('comments')
+                .doc(commentId)
+                .collection('replies')
+                .add({
+                    author: authorData.name,
+                    isDev: authorData.isDev,
+                    text: text,
+                    createdAt: new Date().toLocaleString('ar-EG'),
+                    createdAtMs: Date.now()
+                });
+
+            textInput.value = '';
+            document.getElementById(`reply-form-${commentId}`).style.display = 'none';
+        }
+
+        async function deleteComment(itemId, commentId) {
+            if (!requireOwnerPassword('حذف التعليق')) return;
+
+            try {
+                await db.collection(COLLECTION)
+                    .doc(itemId)
+                    .collection('comments')
+                    .doc(commentId)
+                    .delete();
+                alert('تم حذف التعليق.');
+            } catch (err) {
+                console.error("Delete error:", err);
+            }
+        }
+
+        // تهيئة التعليقات للفيديوهات المحلية فور تحميل الصفحة
+        ['local_video_1', 'local_video_2', 'local_video_3'].forEach(id => listenToComments(id));
     </script>
 </body>
 </html>
