@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <link rel="shortcut icon" href="./mrhesham.jpeg" type="image/x-icon">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>مِداد الذِّكر | الموسوعة الإسلامية الشاملة</title>
@@ -86,7 +87,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
         const firebaseConfig = {
@@ -107,6 +108,40 @@
             localStorage.setItem('visitor_secret_id', 'user_' + Math.random().toString(36).substr(2, 9) + Date.now());
         }
         window.visitorSecretId = localStorage.getItem('visitor_secret_id');
+
+        // واجهة غرف التحدي عن بُعد؛ منطق العرض يبقى في واجهة المسابقة أدناه.
+        window.remoteQuizApi = {
+            create: (roomId, room) => setDoc(doc(db, 'remote_quiz_rooms', roomId), room),
+            listen: (roomId, callback) => onSnapshot(doc(db, 'remote_quiz_rooms', roomId), snapshot => callback(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null)),
+            join: (roomId, guest) => runTransaction(db, async transaction => {
+                const roomRef = doc(db, 'remote_quiz_rooms', roomId);
+                const snapshot = await transaction.get(roomRef);
+                if (!snapshot.exists()) throw new Error('رابط التحدي غير صالح أو انتهت الغرفة.');
+                const room = snapshot.data();
+                if (room.guest && room.guest.id !== guest.id) throw new Error('انضم لاعب آخر إلى هذه الغرفة بالفعل.');
+                if (room.host.id === guest.id) throw new Error('أنت منشئ هذا التحدي بالفعل.');
+                transaction.update(roomRef, { guest, status: 'active', updatedAt: Date.now() });
+            }),
+            answer: (roomId, playerId, isCorrect) => runTransaction(db, async transaction => {
+                const roomRef = doc(db, 'remote_quiz_rooms', roomId);
+                const snapshot = await transaction.get(roomRef);
+                if (!snapshot.exists()) throw new Error('لم تعد غرفة التحدي متاحة.');
+                const room = snapshot.data();
+                if (room.status !== 'active' || room.turn !== playerId) throw new Error('ليس دورك الآن.');
+
+                const isHost = room.host.id === playerId;
+                const nextIndex = room.currentIndex + 1;
+                const isFinished = nextIndex >= room.questionOrder.length;
+                transaction.update(roomRef, {
+                    hostScore: (room.hostScore || 0) + (isHost && isCorrect ? 1 : 0),
+                    guestScore: (room.guestScore || 0) + (!isHost && isCorrect ? 1 : 0),
+                    currentIndex: nextIndex,
+                    turn: isFinished ? null : (isHost ? room.guest.id : room.host.id),
+                    status: isFinished ? 'completed' : 'active',
+                    updatedAt: Date.now()
+                });
+            })
+        };
 
         // --- نظام الاستفسارات السحابي ---
         window.submitQuestion = async function() {
@@ -161,6 +196,7 @@
                     author: 'زائر',
                     content: commentText,
                     timestamp: Date.now(),
+                    replies: [],
                     userId: window.visitorSecretId
                 });
                 if (input) input.value = '';
@@ -236,6 +272,61 @@
             } catch (error) {
                 console.error('فشل تسجيل الإعجاب:', error);
             }
+        };
+
+        window.submitArticleCommentReply = async function(commentId) {
+            const input = document.getElementById(`article-reply-input-${commentId}`);
+            const content = input ? input.value.trim() : '';
+            if (!content) return alert('يرجى كتابة الرد أولاً.');
+
+            const comment = (window.allFirebaseArticleComments || []).find(item => item.id === commentId);
+            if (!comment) return;
+            const reply = {
+                id: `article_reply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                author: 'زائر',
+                content,
+                timestamp: Date.now(),
+                userId: window.visitorSecretId
+            };
+
+            await updateDoc(doc(db, 'article_comments', commentId), {
+                replies: [...(comment.replies || []), reply]
+            });
+            input.value = '';
+        };
+
+        window.toggleArticleReplyForm = function(commentId) {
+            const form = document.getElementById(`article-reply-form-${commentId}`);
+            if (!form) return;
+
+            const willOpen = form.classList.contains('hidden');
+            form.classList.toggle('hidden');
+            if (willOpen) {
+                requestAnimationFrame(() => {
+                    document.getElementById(`article-reply-input-${commentId}`)?.focus();
+                });
+            }
+        };
+
+        window.toggleArticleReplies = function(commentId) {
+            const replies = document.getElementById(`article-replies-${commentId}`);
+            const button = document.getElementById(`article-replies-toggle-${commentId}`);
+            if (!replies || !button) return;
+
+            const isHidden = replies.classList.toggle('hidden');
+            button.textContent = isHidden
+                ? `عرض الردود (${replies.dataset.count || 0})`
+                : 'إخفاء الردود';
+        };
+
+        window.updateArticleComment = async function(commentId, content) {
+            if (!content) throw new Error('لا يمكن حفظ تعليق فارغ.');
+            await updateDoc(doc(db, 'article_comments', commentId), { content, editedAt: Date.now() });
+        };
+
+        window.deleteArticleCommentAsOwner = async function(commentId, secret) {
+            if (secret !== '3092004') throw new Error('كلمة سر المالك غير صحيحة.');
+            await deleteDoc(doc(db, 'article_comments', commentId));
         };
 
         window.updateQuizCommentAsOwner = async function(commentId, content) {
@@ -666,24 +757,24 @@
 
         <!-- مودال قراءة المقال الكاملة -->
         <div id="article-read-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm transition-opacity duration-300">
-            <div class="bg-white w-full max-w-2xl h-[75vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-emerald-100 scale-90 transition-transform duration-300">
-                <div class="bg-emerald-900 p-4 text-white flex justify-between items-center">
+            <div class="bg-black w-full max-w-3xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700 scale-90 transition-transform duration-300">
+                <div class="bg-emerald-900 p-5 text-white flex justify-between items-center">
                     <h3 id="read-modal-title" class="text-lg font-bold text-gold-500">عنوان المقال</h3>
                     <div class="flex items-center gap-3">
                         <button onclick="window.openArticleEditModal()" class="text-xs font-bold text-gold-500 hover:text-white transition-colors">تعديل</button>
                         <button onclick="closeArticleModal()" class="text-white hover:text-gold-500 text-2xl font-bold transition-colors" aria-label="إغلاق">&times;</button>
                     </div>
                 </div>
-                <div class="p-3 bg-emerald-50/60 border-b border-emerald-100 flex justify-between text-xs text-slate-500 px-6">
+                <div class="p-3 bg-slate-900 border-b border-slate-700 flex justify-between text-sm text-slate-300 px-6">
                     <span id="read-modal-author">الكاتب: </span>
                     <span id="read-modal-date">التاريخ: </span>
                 </div>
-                <div id="read-modal-content" class="p-6 overflow-y-auto flex-1 leading-relaxed text-sm text-slate-700 whitespace-pre-line text-right Amiri"></div>
-                <div class="p-4 border-t border-emerald-100 bg-emerald-50/70">
-                    <h4 class="text-sm font-bold text-emerald-900 mb-3">💬 تعليقات الزوار</h4>
-                    <textarea id="article-comment-input" rows="3" placeholder="اكتب تعليقك هنا وسيتاح لجميع الزوار رؤيته..." class="w-full px-3 py-2 text-sm border border-emerald-100 rounded-xl focus:outline-none focus:border-gold-500 bg-white resize-none"></textarea>
+                <div id="read-modal-content" class="m-4 overflow-y-auto flex-1 rounded-xl border border-slate-700 bg-slate-950 p-6 text-base font-medium leading-8 text-white whitespace-pre-line text-right Amiri"></div>
+                <div class="p-4 border-t border-slate-700 bg-black">
+                    <h4 class="text-sm font-bold text-gold-500 mb-3">💬 تعليقات الزوار</h4>
+                    <textarea id="article-comment-input" rows="3" placeholder="اكتب تعليقك هنا وسيتاح لجميع الزوار رؤيته..." class="w-full px-3 py-2 text-sm text-white border border-slate-600 rounded-xl focus:outline-none focus:border-gold-500 bg-slate-950 placeholder:text-slate-400 resize-none"></textarea>
                     <button onclick="window.submitArticleComment()" class="mt-2 px-4 py-2 rounded-full bg-emerald-900 text-gold-500 font-bold text-xs hover:bg-emerald-800 transition-colors">نشر التعليق</button>
-                    <div id="article-comments-list" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
+                    <div id="article-comments-list" class="mt-4 space-y-3 max-h-96 overflow-y-auto"></div>
                 </div>
             </div>
         </div>
@@ -707,7 +798,11 @@
 
     <!-- قسم مسابقة الأسئلة -->
     <main id="quiz-section" class="container mx-auto px-4 py-8 hidden">
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 mb-8 text-center hover:shadow-xl transition-shadow duration-300">
+        <div class="relative bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 mb-8 text-center hover:shadow-xl transition-shadow duration-300">
+            <button type="button" onclick="toggleQuizInstructions()" class="fixed right-4 top-24 z-50 flex items-center gap-2 rounded-full border-2 border-gold-500 bg-emerald-950 px-4 py-2 text-sm font-bold text-gold-500 shadow-2xl ring-4 ring-gold-500/30 transition-all hover:scale-105 hover:bg-emerald-800" aria-label="فتح تعليمات المسابقة" title="فتح تعليمات المسابقة">
+                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-gold-500 text-base text-emerald-950">📘</span>
+                <span>التعليمات</span>
+            </button>
             <h2 class="text-2xl font-bold text-emerald-900 mb-2">مسابقة مِداد الذِّكر الثقافية</h2>
             <p class="text-slate-600 max-w-xl mx-auto text-sm mb-4">500 سؤال وجواب لاختبار معلوماتك في القرآن الكريم والتاريخ الإسلامي.</p>
             <div class="mx-auto mb-4 max-w-xl text-right">
@@ -716,16 +811,66 @@
                 <div class="mt-3 flex justify-center gap-2" role="group" aria-label="وضع المسابقة">
                     <button id="quiz-solo-mode" onclick="setQuizMode('solo')" class="bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500">فردي</button>
                     <button id="quiz-duel-mode" onclick="setQuizMode('duel')" class="border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900">تحدي لاعبين</button>
+                    <button id="quiz-remote-mode" onclick="setQuizMode('remote')" class="border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900">تحدي عن بُعد</button>
                 </div>
                 <div id="quiz-player-two-wrap" class="hidden mt-3">
                     <label for="quiz-player-two" class="mb-1 block text-xs font-bold text-emerald-900">اسم اللاعب الثاني</label>
                     <input id="quiz-player-two" type="text" maxlength="30" placeholder="اكتب اسم المنافس" class="w-full border border-emerald-100 bg-emerald-50/40 px-3 py-2 text-sm focus:outline-none focus:border-gold-500">
                 </div>
+                <div id="quiz-remote-wrap" class="hidden mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-right">
+                    <p class="mb-3 text-sm font-bold text-emerald-900">تحدَّ صديقًا من جهاز آخر</p>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label for="remote-quiz-type" class="mb-1 block text-xs font-bold text-emerald-900">نوع الجولة</label>
+                            <select id="remote-quiz-type" class="w-full border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-900 focus:outline-none focus:border-gold-500">
+                                <option value="quran">أسئلة القرآن الكريم</option>
+                                <option value="history">أسئلة التاريخ الإسلامي</option>
+                                <option value="all">التحدي الشامل</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="createRemoteChallenge()" class="w-full bg-emerald-900 px-4 py-2 text-sm font-bold text-gold-500 hover:bg-emerald-800">إنشاء رابط التحدي</button>
+                        </div>
+                    </div>
+                    <div id="remote-invite-wrap" class="hidden mt-3">
+                        <label for="remote-invite-link" class="mb-1 block text-xs font-bold text-emerald-900">أرسل هذا الرابط لصديقك</label>
+                        <div class="flex gap-2">
+                            <input id="remote-invite-link" readonly class="min-w-0 flex-1 border border-emerald-200 bg-white px-3 py-2 text-xs text-slate-700" aria-label="رابط دعوة التحدي">
+                            <button onclick="copyRemoteInvite()" class="shrink-0 border border-emerald-800 px-3 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-100">نسخ</button>
+                        </div>
+                        <p id="remote-room-status" class="mt-2 text-xs text-slate-600">بانتظار دخول اللاعب الثاني…</p>
+                    </div>
+                    <div class="mt-4 border-t border-emerald-200 pt-3">
+                        <label for="remote-room-link" class="mb-1 block text-xs font-bold text-emerald-900">لديك رابط دعوة؟ الصقه هنا</label>
+                        <div class="flex gap-2">
+                            <input id="remote-room-link" type="text" placeholder="الصق رابط التحدي" class="min-w-0 flex-1 border border-emerald-200 bg-white px-3 py-2 text-xs focus:outline-none focus:border-gold-500">
+                            <button onclick="joinRemoteChallenge()" class="shrink-0 bg-gold-500 px-3 py-2 text-xs font-bold text-emerald-950 hover:bg-gold-600">انضم للجولة</button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="flex flex-wrap justify-center gap-4 mt-2">
+            <div id="quiz-local-start-options" class="flex flex-wrap justify-center gap-4 mt-2">
                 <button onclick="startQuiz('quran')" class="quiz-mode-btn px-6 py-2.5 rounded-xl bg-emerald-900 text-gold-500 font-bold hover:bg-emerald-800 shadow transition-all text-xs sm:text-sm">أسئلة القرآن الكريم</button>
                 <button onclick="startQuiz('history')" class="quiz-mode-btn px-6 py-2.5 rounded-xl bg-gold-500 text-emerald-950 font-bold hover:bg-gold-600 shadow transition-all text-xs sm:text-sm">أسئلة التاريخ الإسلامي</button>
                 <button onclick="startQuiz('all')" class="quiz-mode-btn px-6 py-2.5 rounded-xl border border-gold-500 bg-white text-emerald-900 font-bold hover:bg-emerald-50 shadow transition-all text-xs sm:text-sm">التحدي الشامل: 500 سؤال</button>
+            </div>
+        </div>
+
+        <div id="quiz-instructions-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="quiz-instructions-title">
+            <div class="w-full max-w-lg rounded-2xl border border-slate-700 bg-black p-6 text-right text-white shadow-2xl">
+                <div class="mb-5 flex items-center justify-between gap-4">
+                    <h3 id="quiz-instructions-title" class="text-xl font-bold text-gold-500">تعليمات مسابقة الأسئلة</h3>
+                    <button type="button" onclick="toggleQuizInstructions()" class="text-2xl font-bold text-slate-300 hover:text-gold-500" aria-label="إغلاق">&times;</button>
+                </div>
+                <ol class="space-y-4 pr-5 text-sm leading-7 text-slate-100 list-decimal">
+                    <li><strong class="text-gold-500">اكتب اسمك أولًا:</strong> ثم اختر نمط اللعب المناسب لك.</li>
+                    <li><strong class="text-gold-500">فردي:</strong> أجب عن الأسئلة لتحصل على نتيجتك الشخصية.</li>
+                    <li><strong class="text-gold-500">تحدي لاعبين:</strong> اكتب اسم اللاعب الثاني وتبادلا الأدوار من الجهاز نفسه.</li>
+                    <li><strong class="text-gold-500">تحدي عن بُعد:</strong> ينشئ اللاعب الأول رابطًا ويرسله لصديقه؛ يكتب الصديق اسمه وينضم للرابط، ثم تتحدث النقاط بين الجهازين.</li>
+                    <li>في التحدي عن بُعد، يظهر اسم صاحب الدور. انتظر دورك ولا تغلق الصفحة أثناء الجولة.</li>
+                    <li>بعد اختيار الإجابة، تظهر النتيجة وتُعرض النتيجة النهائية عند انتهاء الأسئلة.</li>
+                </ol>
+                <button type="button" onclick="toggleQuizInstructions()" class="mt-6 w-full rounded-xl bg-emerald-900 px-4 py-3 font-bold text-gold-500 hover:bg-emerald-800">فهمت، ابدأ المسابقة</button>
             </div>
         </div>
 
@@ -882,6 +1027,32 @@
     window.allFirebaseVideos = [];
     window.currentEraIndex = 0;
     window.currentArticleId = null;
+
+    // يبقى زر الرد متاحاً حتى لو تأخر تحميل خدمات التعليقات السحابية.
+    window.toggleArticleReplyForm = function(commentId) {
+        const form = document.getElementById(`article-reply-form-${commentId}`);
+        if (!form) return;
+
+        const willOpen = form.classList.contains('hidden');
+        form.classList.toggle('hidden');
+        if (willOpen) {
+            requestAnimationFrame(() => {
+                document.getElementById(`article-reply-input-${commentId}`)?.focus();
+            });
+        }
+    };
+
+    window.toggleArticleReplies = function(commentId) {
+        const replies = document.getElementById(`article-replies-${commentId}`);
+        const button = document.getElementById(`article-replies-toggle-${commentId}`);
+        if (!replies || !button) return;
+
+        const isHidden = replies.classList.toggle('hidden');
+        button.textContent = isHidden
+            ? `عرض الردود (${replies.dataset.count || 0})`
+            : 'إخفاء الردود';
+    };
+
     let historyLoaded = false;
     let worldNewsLoaded = false;
     let currentQuestionsList = [];
@@ -891,6 +1062,9 @@
     let quizPlayers = [];
     let quizScores = [];
     let activeQuizPlayer = 0;
+    let remoteRoomId = null;
+    let remoteRoomUnsubscribe = null;
+    let remoteRoomData = null;
 
     function escapeHtml(value) {
         return String(value)
@@ -1433,6 +1607,51 @@
         }
     ];
 
+    const sectionAds = [
+        'https://omg10.com/4/11156223',
+        'https://omg10.com/4/11156899',
+        'https://omg10.com/4/11156897'
+    ];
+    let nextAdIndex = 0;
+
+    function openNextAd(trigger) {
+        if (!trigger || trigger.dataset.adOpened === 'true') return;
+        trigger.dataset.adOpened = 'true';
+
+        const url = sectionAds[nextAdIndex];
+        nextAdIndex = (nextAdIndex + 1) % sectionAds.length;
+        const adWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (adWindow) adWindow.opener = null;
+    }
+
+    function showSectionAds(tabId) {
+        const section = document.getElementById(`${tabId}-section`);
+        if (!section || section.querySelector('.section-ad-links')) return;
+
+        const adBlock = document.createElement('aside');
+        adBlock.className = 'section-ad-links mb-6 rounded-2xl border border-gold-500/30 bg-emerald-950 p-4 text-right shadow-lg';
+        adBlock.setAttribute('aria-label', 'إعلانات');
+        adBlock.innerHTML = `
+            <p class="mb-3 text-xs font-bold text-gold-500">إعلانات</p>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                ${sectionAds.map((url, index) => `<a href="${url}" target="_blank" rel="noopener noreferrer sponsored" class="rounded-xl border border-emerald-700 bg-black px-4 py-3 text-center text-sm font-bold text-white transition-colors hover:border-gold-500 hover:text-gold-500">إعلان ${index + 1} ↗</a>`).join('')}
+            </div>
+        `;
+        section.prepend(adBlock);
+    }
+
+    // الإعلانات تُفتح من تفاعل مباشر للمستخدم حتى لا يمنعها المتصفح.
+    document.addEventListener('focusin', (event) => {
+        const field = event.target;
+        if (!(field instanceof HTMLTextAreaElement) || !/(comment|reply)/i.test(field.id)) return;
+        openNextAd(field);
+    });
+
+    document.getElementById('quiz-section').addEventListener('click', (event) => {
+        if (event.target.closest('.section-ad-links, textarea, input, select')) return;
+        openNextAd(event.currentTarget);
+    });
+
     function switchTab(tabId) {
         document.getElementById('quran-section').classList.add('hidden');
         document.getElementById('articles-section').classList.add('hidden');
@@ -1463,12 +1682,16 @@
                 initHistorySection();
                 historyLoaded = true;
             }
-            } else if(tabId === 'world-news') {
+        } else if(tabId === 'world-news') {
             document.getElementById('world-news-section').classList.remove('hidden');
             document.getElementById('btn-world-news').className = "px-5 py-2 rounded-full bg-gold-500 text-emerald-950 font-bold shadow transition-all text-xs sm:text-sm";
             initWorldNews();
         }
+
+        showSectionAds(tabId);
     }
+
+    showSectionAds('quran');
 
     async function initWorldNews() {
         if (worldNewsLoaded) return;
@@ -1846,6 +2069,31 @@
         });
     }
 
+    window.editArticleComment = async function(commentId) {
+        const comment = (window.allFirebaseArticleComments || []).find(item => item.id === commentId);
+        if (!comment) return;
+        const content = prompt('عدّل نص التعليق:', comment.content || '');
+        if (content === null) return;
+
+        try {
+            await window.updateArticleComment(commentId, content.trim());
+        } catch (error) {
+            alert(error.message || 'فشل تعديل التعليق.');
+        }
+    };
+
+    window.requestDeleteArticleComment = async function(commentId) {
+        if (!confirm('هل تريد حذف هذا التعليق نهائياً؟')) return;
+        const secret = prompt('أدخل كلمة سر مالك الموقع لحذف التعليق:');
+        if (secret === null) return;
+
+        try {
+            await window.deleteArticleCommentAsOwner(commentId, secret.trim());
+        } catch (error) {
+            alert(error.message || 'فشل حذف التعليق.');
+        }
+    };
+
     window.renderArticleComments = function(articleId) {
         const list = document.getElementById('article-comments-list');
         if (!list) return;
@@ -1861,6 +2109,13 @@
 
         list.innerHTML = comments.map(comment => {
             const dateStr = new Date(comment.timestamp).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+            const replyCount = (comment.replies || []).length;
+            const replies = (comment.replies || []).map(reply => `
+                <div class="mr-4 border-r-2 border-gold-500 bg-emerald-50/50 p-2 text-right">
+                    <span class="text-[11px] font-bold text-emerald-800">${escapeHtml(reply.author || 'زائر')}</span>
+                    <p class="mt-1 text-xs text-slate-700 leading-relaxed">${escapeHtml(reply.content || '')}</p>
+                </div>
+            `).join('');
             return `
                 <div class="rounded-xl border border-emerald-100 bg-white p-3 text-right">
                     <div class="flex justify-between items-center mb-1">
@@ -1868,6 +2123,18 @@
                         <span class="text-[12px] font-bold text-emerald-800">${escapeHtml(comment.author || 'زائر')}</span>
                     </div>
                     <p class="text-sm text-slate-700 leading-relaxed">${escapeHtml(comment.content || '')}</p>
+                    <div class="mt-2 flex items-center gap-3 text-[11px]">
+                        <button onclick="window.toggleArticleReplyForm('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">رد</button>
+                        ${replyCount ? `<button id="article-replies-toggle-${comment.id}" onclick="window.toggleArticleReplies('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">عرض الردود (${replyCount})</button>` : ''}
+                        <button onclick="window.editArticleComment('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">تعديل</button>
+                        <button onclick="window.requestDeleteArticleComment('${comment.id}')" class="font-bold text-slate-500 hover:text-red-600">حذف</button>
+                    </div>
+                    <div id="article-reply-form-${comment.id}" class="hidden mt-4 rounded-xl border border-slate-700 bg-black p-4 shadow-inner">
+                        <label for="article-reply-input-${comment.id}" class="mb-2 block text-sm font-bold text-white">اكتب ردك</label>
+                        <textarea id="article-reply-input-${comment.id}" dir="rtl" rows="6" placeholder="اكتب ردك على هذا التعليق..." aria-label="اكتب ردك على التعليق" class="min-h-32 w-full cursor-text resize-y rounded-lg border border-slate-500 bg-slate-950 px-4 py-3 text-base font-medium leading-7 text-white caret-white placeholder:text-slate-300 focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/40"></textarea>
+                        <button onclick="window.submitArticleCommentReply('${comment.id}')" class="mt-3 w-full rounded-lg bg-emerald-900 px-4 py-3 text-sm font-bold text-gold-500 hover:bg-emerald-800">نشر الرد</button>
+                    </div>
+                    ${replies ? `<div id="article-replies-${comment.id}" data-count="${replyCount}" class="hidden mt-3 space-y-2">${replies}</div>` : ''}
                 </div>
             `;
         }).join('');
@@ -2033,13 +2300,29 @@
                 }
             });
         }
+
+        const invitedRoomId = extractRemoteRoomId(location.hash);
+        if (location.hash.startsWith('#challenge=') && invitedRoomId) {
+            setQuizMode('remote');
+            document.getElementById('remote-room-link').value = location.href;
+            switchTab('quiz');
+        }
     });
+
+    function toggleQuizInstructions() {
+        const modal = document.getElementById('quiz-instructions-modal');
+        modal.classList.toggle('hidden');
+        modal.classList.toggle('flex');
+    }
 
     function setQuizMode(mode) {
         quizMode = mode;
         document.getElementById('quiz-player-two-wrap').classList.toggle('hidden', mode !== 'duel');
+        document.getElementById('quiz-remote-wrap').classList.toggle('hidden', mode !== 'remote');
+        document.getElementById('quiz-local-start-options').classList.toggle('hidden', mode === 'remote');
         document.getElementById('quiz-solo-mode').className = mode === 'solo' ? 'bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500' : 'border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900';
         document.getElementById('quiz-duel-mode').className = mode === 'duel' ? 'bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500' : 'border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900';
+        document.getElementById('quiz-remote-mode').className = mode === 'remote' ? 'bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500' : 'border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900';
     }
 
     function updateQuizScore() {
@@ -2141,6 +2424,169 @@
     }
 
     function resetQuiz() { document.getElementById('quiz-result-box').classList.add('hidden'); }
+
+    function getRemoteQuestionBank(type) {
+        return type === 'all' ? [...quizDatabase.quran, ...quizDatabase.history] : quizDatabase[type];
+    }
+
+    function remoteQuizTitle(type) {
+        return type === 'quran' ? 'تحدي القرآن الكريم عن بُعد' : type === 'history' ? 'تحدي التاريخ الإسلامي عن بُعد' : 'التحدي الشامل عن بُعد';
+    }
+
+    function makeRemoteRoomId() {
+        return `room_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function getRemoteInvite(roomId) {
+        return `${location.href.split('#')[0]}#challenge=${encodeURIComponent(roomId)}`;
+    }
+
+    function watchRemoteRoom(roomId) {
+        if (remoteRoomUnsubscribe) remoteRoomUnsubscribe();
+        remoteRoomId = roomId;
+        remoteRoomUnsubscribe = window.remoteQuizApi.listen(roomId, room => {
+            remoteRoomData = room;
+            if (!room) return alert('لم تعد غرفة التحدي متاحة.');
+            renderRemoteRoom(room);
+        });
+    }
+
+    async function createRemoteChallenge() {
+        const name = document.getElementById('quiz-player-one').value.trim();
+        if (!name) return alert('اكتب اسمك أولاً لإنشاء التحدي.');
+        if (!window.remoteQuizApi) return alert('جاري الاتصال بخدمة التحديات، حاول بعد لحظات.');
+
+        const type = document.getElementById('remote-quiz-type').value;
+        const bank = getRemoteQuestionBank(type);
+        const roomId = makeRemoteRoomId();
+        const questionOrder = bank.map((_, index) => index).sort(() => Math.random() - 0.5);
+        const host = { id: window.visitorSecretId, name };
+        try {
+            await window.remoteQuizApi.create(roomId, {
+                host,
+                guest: null,
+                type,
+                questionOrder,
+                currentIndex: 0,
+                hostScore: 0,
+                guestScore: 0,
+                turn: host.id,
+                status: 'waiting',
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+            const invite = getRemoteInvite(roomId);
+            document.getElementById('remote-invite-link').value = invite;
+            document.getElementById('remote-invite-wrap').classList.remove('hidden');
+            document.getElementById('remote-room-status').textContent = 'تم إنشاء الغرفة. أرسل الرابط للاعب الثاني ثم انتظر دخوله.';
+            watchRemoteRoom(roomId);
+        } catch (error) {
+            console.error(error);
+            alert('تعذر إنشاء رابط التحدي. حاول مرة أخرى.');
+        }
+    }
+
+    async function copyRemoteInvite() {
+        const input = document.getElementById('remote-invite-link');
+        if (!input.value) return;
+        try {
+            await navigator.clipboard.writeText(input.value);
+            document.getElementById('remote-room-status').textContent = 'تم نسخ الرابط. أرسله لصديقك.';
+        } catch {
+            input.select();
+            document.execCommand('copy');
+            document.getElementById('remote-room-status').textContent = 'تم تحديد الرابط؛ انسخه وأرسله لصديقك.';
+        }
+    }
+
+    function extractRemoteRoomId(value) {
+        const text = value.trim();
+        const match = text.match(/(?:#challenge=|challenge=)([^&\s]+)/);
+        return decodeURIComponent(match ? match[1] : text.replace(/^#/, ''));
+    }
+
+    async function joinRemoteChallenge() {
+        const name = document.getElementById('quiz-player-one').value.trim();
+        const roomId = extractRemoteRoomId(document.getElementById('remote-room-link').value);
+        if (!name) return alert('اكتب اسمك أولاً قبل الانضمام للجولة.');
+        if (!roomId) return alert('الصق رابط التحدي أولاً.');
+        if (!window.remoteQuizApi) return alert('جاري الاتصال بخدمة التحديات، حاول بعد لحظات.');
+
+        try {
+            await window.remoteQuizApi.join(roomId, { id: window.visitorSecretId, name });
+            document.getElementById('remote-invite-wrap').classList.remove('hidden');
+            document.getElementById('remote-invite-link').value = getRemoteInvite(roomId);
+            document.getElementById('remote-room-status').textContent = 'تم الانضمام. تبدأ الجولة الآن حسب دور كل لاعب.';
+            watchRemoteRoom(roomId);
+        } catch (error) {
+            alert(error.message || 'تعذر الانضمام إلى التحدي.');
+        }
+    }
+
+    function renderRemoteRoom(room) {
+        const status = document.getElementById('remote-room-status');
+        const isHost = room.host.id === window.visitorSecretId;
+        const isGuest = room.guest && room.guest.id === window.visitorSecretId;
+        if (!isHost && !isGuest) return;
+        if (room.status === 'waiting') {
+            status.textContent = 'بانتظار دخول اللاعب الثاني من رابط الدعوة…';
+            return;
+        }
+
+        const bank = getRemoteQuestionBank(room.type);
+        const questions = room.questionOrder.map(index => bank[index]).filter(Boolean);
+        const activePlayer = room.host.id === room.turn ? room.host : room.guest;
+        const yourTurn = room.turn === window.visitorSecretId;
+        document.getElementById('remote-invite-wrap').classList.remove('hidden');
+
+        if (room.status === 'completed') {
+            document.getElementById('quiz-game-box').classList.add('hidden');
+            document.getElementById('final-score-text').innerText = `${room.hostScore} - ${room.guestScore}`;
+            const winner = room.hostScore === room.guestScore ? 'انتهت الجولة بالتعادل.' : room.hostScore > room.guestScore ? `الفائز هو ${room.host.name}.` : `الفائز هو ${room.guest.name}.`;
+            document.getElementById('quiz-winner-text').textContent = `${winner} النتيجة: ${room.host.name} ${room.hostScore} - ${room.guestScore} ${room.guest.name}.`;
+            document.getElementById('quiz-result-box').classList.remove('hidden');
+            status.textContent = 'اكتملت الجولة.';
+            return;
+        }
+
+        const question = questions[room.currentIndex];
+        if (!question) return;
+        applyQuizTheme(room.type === 'history' ? 'history' : 'quran');
+        document.getElementById('quiz-result-box').classList.add('hidden');
+        document.getElementById('quiz-game-box').classList.remove('hidden');
+        document.getElementById('quiz-type-title').innerText = `${remoteQuizTitle(room.type)} | ${room.host.name} ضد ${room.guest.name}`;
+        document.getElementById('quiz-progress').innerText = `سؤال ${room.currentIndex + 1} / ${questions.length}`;
+        document.getElementById('quiz-progress-bar').style.width = `${((room.currentIndex + 1) / questions.length) * 100}%`;
+        document.getElementById('quiz-question-text').innerText = question.q;
+        document.getElementById('quiz-score-label').innerHTML = `الدور: <span class="text-emerald-700 font-bold">${escapeHtml(activePlayer.name)}</span> | ${escapeHtml(room.host.name)}: <span class="text-emerald-700 font-bold">${room.hostScore}</span> - ${escapeHtml(room.guest.name)}: <span class="text-emerald-700 font-bold">${room.guestScore}</span>`;
+        document.getElementById('quiz-next-btn').className = 'hidden';
+        status.textContent = yourTurn ? 'دورك الآن: اختر الإجابة.' : `بانتظار إجابة ${activePlayer.name}…`;
+
+        const wrapper = document.getElementById('quiz-options-wrapper');
+        wrapper.innerHTML = '';
+        question.o.forEach((option, index) => {
+            const button = document.createElement('button');
+            button.className = `quiz-option-btn w-full p-4 text-right rounded-xl border border-slate-200 text-slate-700 font-medium text-sm transition-all flex items-center justify-between ${yourTurn ? 'hover:bg-slate-50' : 'opacity-60 cursor-not-allowed'}`;
+            button.innerHTML = `<span>${escapeHtml(option)}</span><span class="h-5 w-5 rounded-full border border-slate-300"></span>`;
+            button.disabled = !yourTurn;
+            if (yourTurn) button.onclick = () => answerRemoteQuestion(index, question.a, button);
+            wrapper.appendChild(button);
+        });
+    }
+
+    async function answerRemoteQuestion(selectedIndex, correctIndex, button) {
+        const buttons = document.getElementById('quiz-options-wrapper').querySelectorAll('button');
+        buttons.forEach(item => item.disabled = true);
+        const correct = selectedIndex === correctIndex;
+        button.classList.add(...(correct
+            ? ['border-emerald-500', 'border-2', 'bg-emerald-50']
+            : ['border-red-500', 'border-2', 'bg-red-50']));
+        try {
+            await window.remoteQuizApi.answer(remoteRoomId, window.visitorSecretId, correct);
+        } catch (error) {
+            alert(error.message || 'تعذر حفظ الإجابة.');
+        }
+    }
 
     function initHistorySection() {
         const menu = document.getElementById('eras-menu');
