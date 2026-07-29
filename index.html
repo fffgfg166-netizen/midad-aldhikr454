@@ -87,6 +87,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBp7gZ7bbabIGrokehXeZH9OaNqs6-tEZY",
@@ -100,6 +101,7 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
         if (!localStorage.getItem('visitor_secret_id')) {
             localStorage.setItem('visitor_secret_id', 'user_' + Math.random().toString(36).substr(2, 9) + Date.now());
@@ -166,6 +168,126 @@
             } catch (error) {
                 console.error("خطأ أثناء نشر التعليق:", error);
                 alert("فشل نشر التعليق، يرجى المحاولة لاحقاً.");
+            }
+        };
+
+        const QUIZ_OWNER_SECRET = '3092004';
+
+        window.submitQuizComment = async function() {
+            const input = document.getElementById('quiz-comment-input');
+            const authorSelect = document.getElementById('quiz-comment-author-select');
+            const secretInput = document.getElementById('quiz-comment-secret-input');
+            const commentText = input ? input.value.trim() : '';
+            const selectedRole = authorSelect ? authorSelect.value : 'visitor';
+            const secretValue = secretInput ? secretInput.value.trim() : '';
+
+            if (!commentText) return alert('يرجى كتابة تعليقك أولاً!');
+
+            let authorName = 'زائر';
+            let badge = 'زائر';
+
+            if (selectedRole === 'developer') {
+                if (secretValue !== QUIZ_OWNER_SECRET) {
+                    return alert('كلمة السر غير صحيحة. لا يمكن نشر التعليق باسم المطور.');
+                }
+                authorName = 'مالك الموقع';
+                badge = 'مالك الموقع';
+            } else if (selectedRole === 'owner') {
+                if (secretValue !== QUIZ_OWNER_SECRET) {
+                    return alert('كلمة السر غير صحيحة. لا يمكن نشر التعليق باسم مالك الموقع.');
+                }
+                authorName = 'مالك الموقع';
+                badge = 'مالك الموقع';
+            }
+
+            try {
+                await addDoc(collection(db, 'quiz_comments'), {
+                    author: authorName,
+                    badge: badge,
+                    content: commentText,
+                    timestamp: Date.now(),
+                    likes: 0,
+                    likedBy: [],
+                    replies: [],
+                    userId: window.visitorSecretId
+                });
+                if (input) input.value = '';
+                if (secretInput) secretInput.value = '';
+                if (typeof window.renderQuizComments === 'function') window.renderQuizComments();
+            } catch (error) {
+                console.error('خطأ أثناء نشر تعليق المسابقة:', error);
+                alert('فشل نشر التعليق، يرجى المحاولة لاحقاً.');
+            }
+        };
+
+        window.likeQuizComment = async function(commentId) {
+            const comment = (window.allFirebaseQuizComments || []).find(item => item.id === commentId);
+            if (!comment) return;
+
+            const alreadyLiked = (comment.likedBy || []).includes(window.visitorSecretId);
+            if (alreadyLiked) return;
+
+            try {
+                await updateDoc(doc(db, 'quiz_comments', commentId), {
+                    likes: (comment.likes || 0) + 1,
+                    likedBy: [...(comment.likedBy || []), window.visitorSecretId]
+                });
+                if (typeof window.renderQuizComments === 'function') window.renderQuizComments();
+            } catch (error) {
+                console.error('فشل تسجيل الإعجاب:', error);
+            }
+        };
+
+        window.toggleQuizReplyBox = function(commentId) {
+            const replyBox = document.getElementById(`quiz-reply-box-${commentId}`);
+            if (replyBox) replyBox.classList.toggle('hidden');
+        };
+
+        window.submitQuizCommentReply = async function(commentId) {
+            const input = document.getElementById(`quiz-reply-input-${commentId}`);
+            const content = input ? input.value.trim() : '';
+            if (!content) return alert('يرجى كتابة الرد أولاً!');
+
+            const comment = (window.allFirebaseQuizComments || []).find(item => item.id === commentId);
+            if (!comment) return;
+
+            const reply = {
+                id: `reply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                author: 'زائر',
+                badge: 'زائر',
+                content,
+                timestamp: Date.now(),
+                likes: 0,
+                likedBy: [],
+                userId: window.visitorSecretId
+            };
+
+            try {
+                await updateDoc(doc(db, 'quiz_comments', commentId), {
+                    replies: [...(comment.replies || []), reply]
+                });
+                input.value = '';
+            } catch (error) {
+                console.error('فشل نشر الرد:', error);
+                alert('فشل نشر الرد، يرجى المحاولة لاحقاً.');
+            }
+        };
+
+        window.likeQuizReply = async function(commentId, replyId) {
+            const comment = (window.allFirebaseQuizComments || []).find(item => item.id === commentId);
+            const reply = (comment && comment.replies || []).find(item => item.id === replyId);
+            if (!comment || !reply || (reply.likedBy || []).includes(window.visitorSecretId)) return;
+
+            const replies = comment.replies.map(item => item.id === replyId ? {
+                ...item,
+                likes: (item.likes || 0) + 1,
+                likedBy: [...(item.likedBy || []), window.visitorSecretId]
+            } : item);
+
+            try {
+                await updateDoc(doc(db, 'quiz_comments', commentId), { replies });
+            } catch (error) {
+                console.error('فشل تسجيل الإعجاب بالرد:', error);
             }
         };
 
@@ -245,6 +367,27 @@
             }
             if (typeof window.renderArticles === 'function') window.renderArticles();
         });
+
+        // الاستماع اللحظي لتعليقات المسابقة
+        const qQuizComments = query(collection(db, 'quiz_comments'), orderBy('timestamp', 'asc'));
+        onSnapshot(qQuizComments, (snapshot) => {
+            window.allFirebaseQuizComments = [];
+            snapshot.forEach((doc) => {
+                window.allFirebaseQuizComments.push({ id: doc.id, ...doc.data() });
+            });
+            if (typeof window.renderQuizComments === 'function') window.renderQuizComments();
+        });
+
+        // الفيديوهات تُحفظ في Firebase Storage وتُعرض للجميع من Firestore.
+        const qSharedVideos = query(collection(db, 'shared_videos'), orderBy('createdAtMs', 'desc'));
+        onSnapshot(qSharedVideos, (snapshot) => {
+            window.allFirebaseVideos = [];
+            snapshot.forEach((videoDoc) => {
+                window.allFirebaseVideos.push({ id: videoDoc.id, ...videoDoc.data() });
+            });
+            if (typeof window.renderSharedVideos === 'function') window.renderSharedVideos();
+            if (typeof window.loadLiveStreamVideo === 'function') window.loadLiveStreamVideo();
+        }, (error) => console.error('فشل تحميل الفيديوهات العامة:', error));
 
         // الفيديوهات تُعرض محلياً داخل المتصفح فقط دون أي قاعدة بيانات.
     </script>
@@ -379,8 +522,8 @@
 
     <section class="container mx-auto px-4 py-8">
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 mb-6">
-            <h2 class="text-2xl font-bold text-emerald-900 mb-2">🎬 رفع فيديو إلى مجلد video</h2>
-            <p class="text-slate-600 text-sm">اختر فيديو من جهازك وسيتم رفعه إلى مجلد video عبر ملف backend وعرضه مباشرة على الصفحة.</p>
+            <h2 class="text-2xl font-bold text-emerald-900 mb-2">🎬 رفع فيديو عام</h2>
+            <p class="text-slate-600 text-sm">اختر فيديو من جهازك ليُرفع إلى التخزين السحابي ويظهر مباشرة لجميع الزوار.</p>
             <div class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
                 <div class="grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr_0.8fr_auto] gap-3 items-end">
                     <div>
@@ -397,7 +540,7 @@
                     </div>
                     <button onclick="window.uploadLocalVideo()" class="px-4 py-2 rounded-full bg-emerald-900 text-white font-bold text-sm hover:bg-emerald-800 transition-colors">رفع الفيديو</button>
                 </div>
-                <p class="text-[11px] text-slate-500 mt-3">سيتم حفظ الفيديو داخل مجلد video عبر backend ثم عرضه على الصفحة.</p>
+                <p class="text-[11px] text-slate-500 mt-3">سيُحفظ الفيديو في التخزين السحابي ويظهر في الصفحة لجميع الزوار.</p>
             </div>
         </div>
         <div id="shared-videos-wrapper" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
@@ -520,10 +663,23 @@
     <main id="quiz-section" class="container mx-auto px-4 py-8 hidden">
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100 mb-8 text-center hover:shadow-xl transition-shadow duration-300">
             <h2 class="text-2xl font-bold text-emerald-900 mb-2">مسابقة مِداد الذِّكر الثقافية</h2>
-            <p class="text-slate-600 max-w-xl mx-auto text-sm mb-4">أكثر من 100 سؤال وجواب لاختبار معلوماتك في القرآن الكريم والتاريخ الإسلامي العريق.</p>
-            <div class="flex justify-center gap-4 mt-2">
+            <p class="text-slate-600 max-w-xl mx-auto text-sm mb-4">500 سؤال وجواب لاختبار معلوماتك في القرآن الكريم والتاريخ الإسلامي.</p>
+            <div class="mx-auto mb-4 max-w-xl text-right">
+                <label for="quiz-player-one" class="mb-1 block text-xs font-bold text-emerald-900">اسم اللاعب</label>
+                <input id="quiz-player-one" type="text" maxlength="30" placeholder="اكتب الاسم الذي تريد اللعب به" class="w-full border border-emerald-100 bg-emerald-50/40 px-3 py-2 text-sm focus:outline-none focus:border-gold-500">
+                <div class="mt-3 flex justify-center gap-2" role="group" aria-label="وضع المسابقة">
+                    <button id="quiz-solo-mode" onclick="setQuizMode('solo')" class="bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500">فردي</button>
+                    <button id="quiz-duel-mode" onclick="setQuizMode('duel')" class="border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900">تحدي لاعبين</button>
+                </div>
+                <div id="quiz-player-two-wrap" class="hidden mt-3">
+                    <label for="quiz-player-two" class="mb-1 block text-xs font-bold text-emerald-900">اسم اللاعب الثاني</label>
+                    <input id="quiz-player-two" type="text" maxlength="30" placeholder="اكتب اسم المنافس" class="w-full border border-emerald-100 bg-emerald-50/40 px-3 py-2 text-sm focus:outline-none focus:border-gold-500">
+                </div>
+            </div>
+            <div class="flex flex-wrap justify-center gap-4 mt-2">
                 <button onclick="startQuiz('quran')" class="quiz-mode-btn px-6 py-2.5 rounded-xl bg-emerald-900 text-gold-500 font-bold hover:bg-emerald-800 shadow transition-all text-xs sm:text-sm">أسئلة القرآن الكريم</button>
                 <button onclick="startQuiz('history')" class="quiz-mode-btn px-6 py-2.5 rounded-xl bg-gold-500 text-emerald-950 font-bold hover:bg-gold-600 shadow transition-all text-xs sm:text-sm">أسئلة التاريخ الإسلامي</button>
+                <button onclick="startQuiz('all')" class="quiz-mode-btn px-6 py-2.5 rounded-xl border border-gold-500 bg-white text-emerald-900 font-bold hover:bg-emerald-50 shadow transition-all text-xs sm:text-sm">التحدي الشامل: 500 سؤال</button>
             </div>
         </div>
 
@@ -541,10 +697,33 @@
                     <div id="quiz-options-wrapper" class="grid grid-cols-1 gap-3"></div>
                 </div>
                 <div class="flex justify-between items-center border-t border-slate-100 pt-4">
-                    <span class="text-sm text-slate-500 font-medium">النقاط الحالية: <span id="quiz-score" class="text-emerald-700 font-bold">0</span></span>
+                    <span id="quiz-score-label" class="text-sm text-slate-500 font-medium">النقاط الحالية: <span id="quiz-score" class="text-emerald-700 font-bold">0</span></span>
                     <button id="quiz-next-btn" onclick="nextQuestion()" class="px-5 py-2 text-sm bg-slate-200 text-slate-400 font-bold rounded-xl pointer-events-none transition-all">السؤال التالي &larr;</button>
                 </div>
             </div>
+        </div>
+
+        <div class="max-w-2xl mx-auto mt-6 bg-white rounded-2xl border border-emerald-100 shadow-sm p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-emerald-900">💬 تعليقات المسابقة</h3>
+                    <p class="text-sm text-slate-500">شارك رأيك أو اترك تعليقاً، وإذا اختارت اسم المطور فستحتاج كلمة سر.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <select id="quiz-comment-author-select" class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 focus:outline-none">
+                        <option value="visitor">زائر</option>
+                        <option value="developer">المطور</option>
+                        <option value="owner">مالك الموقع</option>
+                    </select>
+                    <input id="quiz-comment-secret-input" type="password" placeholder="كلمة السر" class="hidden rounded-xl border border-emerald-100 bg-white px-3 py-2 text-sm text-emerald-900 focus:outline-none focus:border-gold-500">
+                </div>
+            </div>
+            <textarea id="quiz-comment-input" rows="3" placeholder="اكتب تعليقك هنا..." class="w-full px-3 py-2 text-sm border border-emerald-100 rounded-xl focus:outline-none focus:border-gold-500 bg-emerald-50/40 resize-none"></textarea>
+            <div class="flex justify-between items-center mt-3 gap-3">
+                <button onclick="window.submitQuizComment()" class="px-4 py-2 rounded-full bg-emerald-900 text-gold-500 font-bold text-xs hover:bg-emerald-800 transition-colors">نشر التعليق</button>
+                <p class="text-[11px] text-slate-400">التعليقات تُعرض لجميع الزوار مباشرة.</p>
+            </div>
+            <div id="quiz-comments-list" class="mt-4 space-y-2 max-h-60 overflow-y-auto"></div>
         </div>
 
         <div id="quiz-result-box" class="max-w-md mx-auto bg-white rounded-2xl border border-gold-500 shadow-2xl p-8 text-center hidden">
@@ -555,6 +734,7 @@
                 <span class="block text-slate-500 text-xs mb-1">النتيجة النهائية</span>
                 <span id="final-score-text" class="text-3xl font-bold text-emerald-950">0 / 0</span>
             </div>
+            <p id="quiz-winner-text" class="mb-5 text-sm font-bold text-emerald-900"></p>
             <button onclick="resetQuiz()" class="w-full py-3 bg-gold-500 text-emerald-950 font-bold rounded-xl hover:bg-gold-600 shadow transition-all">إعادة المحاولة واللعب مجدداً</button>
         </div>
     </main>
@@ -652,6 +832,7 @@
     window.allFirebaseQuestions = [];
     window.allFirebaseArticles = [];
     window.allFirebaseArticleComments = [];
+    window.allFirebaseQuizComments = [];
     window.allFirebaseVideos = [];
     window.currentEraIndex = 0;
     window.currentArticleId = null;
@@ -660,6 +841,10 @@
     let currentQuestionsList = [];
     let currentQuestionIdx = 0;
     let userScore = 0;
+    let quizMode = 'solo';
+    let quizPlayers = [];
+    let quizScores = [];
+    let activeQuizPlayer = 0;
 
     function escapeHtml(value) {
         return String(value)
@@ -669,33 +854,6 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     }
-
-    window.loadLocalVideos = async function() {
-        window.allFirebaseVideos = [];
-
-        try {
-            const origin = (window.location && window.location.origin && window.location.origin !== 'null')
-                ? window.location.origin
-                : 'http://127.0.0.1:8000';
-            const response = await fetch(`${origin}/list-videos`);
-            const files = await response.json();
-
-            window.allFirebaseVideos = (files || []).map((item, index) => ({
-                id: 'folder_video_' + index,
-                type: 'video',
-                title: item.name,
-                description: 'فيديو موجود داخل مجلد video',
-                fileName: item.name,
-                videoUrl: `${origin}${item.url}`,
-                createdAtMs: Date.now() + index
-            }));
-        } catch (error) {
-            console.error('فشل قراءة الفيديوهات من مجلد video:', error);
-            window.allFirebaseVideos = [];
-        }
-
-        if (typeof window.renderSharedVideos === 'function') window.renderSharedVideos();
-    };
 
     window.applyLiveStreamDetails = function() {
         const titleInput = document.getElementById('live-stream-title-input');
@@ -711,45 +869,36 @@
         localStorage.setItem('liveStreamMeta', JSON.stringify({ title, subject }));
     };
 
-    window.loadLiveStreamVideo = async function() {
+    window.loadLiveStreamVideo = function() {
         const player = document.getElementById('live-stream-player');
         const sourceLabel = document.getElementById('live-stream-source-label');
         const titleInput = document.getElementById('live-stream-title-input');
         const subjectInput = document.getElementById('live-stream-subject-input');
 
-        try {
-            const origin = (window.location && window.location.origin && window.location.origin !== 'null')
-                ? window.location.origin
-                : 'http://127.0.0.1:8000';
-            const response = await fetch(`${origin}/list-videos`);
-            const files = await response.json();
-            const matchingVideo = (files || []).find(item => (item.name || '').toLowerCase().includes('v1')) || (files || [])[0];
+        const videos = window.allFirebaseVideos || [];
+        const matchingVideo = videos.find(item => (item.fileName || item.title || '').toLowerCase().includes('v1')) || videos[0];
 
-            if (!matchingVideo) {
-                throw new Error('لا توجد فيديوهات متاحة');
-            }
+        if (!matchingVideo || !matchingVideo.videoUrl) {
+            if (sourceLabel) sourceLabel.textContent = 'لا توجد فيديوهات عامة متاحة حالياً';
+            return;
+        }
 
-            const videoUrl = `${origin}${matchingVideo.url}`;
+        const videoUrl = matchingVideo.videoUrl;
             if (player) {
                 player.src = videoUrl;
                 player.load();
             }
             if (sourceLabel) {
-                sourceLabel.textContent = `المصدر: ${matchingVideo.name}`;
+                sourceLabel.textContent = `المصدر: ${matchingVideo.fileName || matchingVideo.title}`;
             }
             if (titleInput && !titleInput.value.trim()) {
-                titleInput.value = matchingVideo.name.toLowerCase().includes('v1') ? 'بث مباشر: v1' : `بث مباشر: ${matchingVideo.name}`;
+                const name = matchingVideo.fileName || matchingVideo.title;
+                titleInput.value = name.toLowerCase().includes('v1') ? 'بث مباشر: v1' : `بث مباشر: ${name}`;
             }
             if (subjectInput && !subjectInput.value.trim()) {
-                subjectInput.value = 'فيديو جاهز للعرض من مجلد video';
+                subjectInput.value = matchingVideo.description || 'فيديو عام';
             }
             window.applyLiveStreamDetails();
-        } catch (error) {
-            console.error('فشل تحميل الفيديو المباشر:', error);
-            if (sourceLabel) {
-                sourceLabel.textContent = 'لا توجد فيديوهات متاحة حالياً';
-            }
-        }
     };
 
     window.uploadLocalVideo = async function() {
@@ -761,31 +910,35 @@
         if (!file) return alert('اختر فيديو أولاً من جهازك');
         if (!file.type.startsWith('video/')) return alert('يرجى اختيار ملف فيديو صالح');
 
-        const formData = new FormData();
-        formData.append('video', file);
-        formData.append('title', (titleInput ? titleInput.value.trim() : '') || file.name);
-        formData.append('description', (descInput ? descInput.value.trim() : '') || 'تم رفع الفيديو عبر backend');
+        const title = (titleInput ? titleInput.value.trim() : '') || file.name;
+        const description = (descInput ? descInput.value.trim() : '') || 'فيديو عام';
 
         try {
-            const origin = (window.location && window.location.origin && window.location.origin !== 'null')
-                ? window.location.origin
-                : 'http://127.0.0.1:8000';
-            const response = await fetch(`${origin}/upload-video`, {
-                method: 'POST',
-                body: formData
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const storagePath = `public-videos/${Date.now()}_${safeFileName}`;
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, file, { contentType: file.type });
+            const videoUrl = await getDownloadURL(storageRef);
+
+            await addDoc(collection(db, 'shared_videos'), {
+                type: 'video',
+                title,
+                description,
+                fileName: file.name,
+                storagePath,
+                videoUrl,
+                createdAtMs: Date.now(),
+                uploaderId: window.visitorSecretId
             });
-            const result = await response.json();
-            if (!result.ok) throw new Error('Upload failed');
 
             if (fileInput) fileInput.value = '';
             if (titleInput) titleInput.value = '';
             if (descInput) descInput.value = '';
 
-            await window.loadLocalVideos();
-            alert('تم رفع الفيديو إلى مجلد video بنجاح.');
+            alert('تم رفع الفيديو ونشره لجميع الزوار بنجاح.');
         } catch (error) {
             console.error('فشل رفع الفيديو:', error);
-            alert('فشل رفع الفيديو إلى المجلد المحلي.');
+            alert('فشل رفع الفيديو. تأكد من تفعيل Firebase Storage وصلاحياته.');
         }
     };
 
@@ -796,7 +949,7 @@
         const videos = (window.allFirebaseVideos || []).filter(item => item.type === 'video' && (item.videoUrl || item.videoDataUrl || item.videoPath));
 
         if (!videos.length) {
-            wrapper.innerHTML = '<div class="text-center py-8 col-span-full text-slate-400 text-sm">لا توجد فيديوهات في مجلد video بعد.</div>';
+            wrapper.innerHTML = '<div class="text-center py-8 col-span-full text-slate-400 text-sm">لا توجد فيديوهات عامة بعد.</div>';
             return;
         }
 
@@ -828,7 +981,6 @@
                 console.error('فشل قراءة بيانات البث المباشر:', error);
             }
         }
-        window.loadLocalVideos();
         window.loadLiveStreamVideo();
     });
 
@@ -990,6 +1142,47 @@
             { q: "ما الدولة الإسلامية في المغرب القرن 11؟", o: ["المرابطون", "الموحدون", "الأدارسة", "البنو غاني"], a: 0 }
         ]
     };
+
+    // نكمل بنك القرآن بأسئلة ترتيب السور، ثم نملأ كل قسم إلى 250 سؤالاً.
+    // بهذا يصبح إجمالي بنك المسابقة 500 سؤال متاح عند بدء أي جولة.
+    (function expandQuizBank() {
+        const surahs = [
+            'الفاتحة','البقرة','آل عمران','النساء','المائدة','الأنعام','الأعراف','الأنفال','التوبة','يونس','هود','يوسف','الرعد','إبراهيم','الحجر','النحل','الإسراء','الكهف','مريم','طه','الأنبياء','الحج','المؤمنون','النور','الفرقان','الشعراء','النمل','القصص','العنكبوت','الروم','لقمان','السجدة','الأحزاب','سبأ','فاطر','يس','الصافات','ص','الزمر','غافر','فصلت','الشورى','الزخرف','الدخان','الجاثية','الأحقاف','محمد','الفتح','الحجرات','ق','الذاريات','الطور','النجم','القمر','الرحمن','الواقعة','الحديد','المجادلة','الحشر','الممتحنة','الصف','الجمعة','المنافقون','التغابن','الطلاق','التحريم','الملك','القلم','الحاقة','المعارج','نوح','الجن','المزمل','المدثر','القيامة','الإنسان','المرسلات','النبأ','النازعات','عبس','التكوير','الانفطار','المطففين','الانشقاق','البروج','الطارق','الأعلى','الغاشية','الفجر','البلد','الشمس','الليل','الضحى','الشرح','التين','العلق','القدر','البينة','الزلزلة','العاديات','القارعة','التكاثر','العصر','الهمزة','الفيل','قريش','الماعون','الكوثر','الكافرون','النصر','المسد','الإخلاص','الفلق','الناس'
+        ];
+        const ordinalOptions = (answer) => {
+            const values = [answer, Math.max(1, answer - 1), Math.min(114, answer + 1), answer > 4 ? answer - 4 : answer + 4];
+            return [...new Set(values)].map(String);
+        };
+
+        surahs.forEach((name, index) => {
+            const order = index + 1;
+            const options = ordinalOptions(order);
+            quizDatabase.quran.push({ q: `ما ترتيب سورة ${name} في المصحف الشريف؟`, o: options, a: options.indexOf(String(order)) });
+        });
+        surahs.slice(0, -1).forEach((name, index) => {
+            const answer = surahs[index + 1];
+            const options = [answer, surahs[Math.max(0, index - 1)], surahs[Math.min(surahs.length - 1, index + 2)], surahs[Math.min(surahs.length - 1, index + 4)]];
+            quizDatabase.quran.push({ q: `ما السورة التي تأتي بعد سورة ${name} في ترتيب المصحف؟`, o: options, a: 0 });
+        });
+
+        // تحفظ أسئلة المراجعة نفس المعلومة مع تدوير الترتيب؛ لتكون كل جولة 250 سؤالاً في القسم.
+        ['quran', 'history'].forEach(type => {
+            const source = quizDatabase[type].slice();
+            let index = 0;
+            while (quizDatabase[type].length < 250) {
+                const question = source[index % source.length];
+                const shift = index % question.o.length;
+                const options = question.o.map((_, optionIndex) => question.o[(optionIndex + shift) % question.o.length]);
+                quizDatabase[type].push({
+                    q: `${question.q} (مراجعة ${index + 1})`,
+                    o: options,
+                    a: options.indexOf(question.o[question.a])
+                });
+                index++;
+            }
+            quizDatabase[type] = quizDatabase[type].slice(0, 250);
+        });
+    })();
 
     const quizThemes = {
         quran: [
@@ -1655,15 +1848,118 @@
         document.getElementById('article-read-modal').classList.add('hidden');
     }
 
+        window.renderQuizComments = function() {
+        const list = document.getElementById('quiz-comments-list');
+        const authorSelect = document.getElementById('quiz-comment-author-select');
+        const secretInput = document.getElementById('quiz-comment-secret-input');
+        if (!list) return;
+
+        if (authorSelect && secretInput) {
+            const needsSecret = authorSelect.value === 'developer' || authorSelect.value === 'owner';
+            secretInput.classList.toggle('hidden', !needsSecret);
+            if (!needsSecret) secretInput.value = '';
+        }
+
+        const comments = (window.allFirebaseQuizComments || [])
+            .slice()
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        if (!comments.length) {
+            list.innerHTML = '<div class="text-xs text-slate-400">لا توجد تعليقات بعد. كن أول من يعلق.</div>';
+            return;
+        }
+
+        list.innerHTML = comments.map(comment => {
+            const dateStr = new Date(comment.timestamp).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+            const likes = comment.likes || 0;
+            const badge = comment.badge || 'زائر';
+            const liked = (comment.likedBy || []).includes(window.visitorSecretId);
+            const replies = (comment.replies || []).map(reply => {
+                const replyLiked = (reply.likedBy || []).includes(window.visitorSecretId);
+                return `
+                    <div class="border-r-2 border-gold-500 bg-white p-3 text-right">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-xs font-bold text-emerald-900">${escapeHtml(reply.author || 'زائر')}</span>
+                            <button onclick="window.likeQuizReply('${comment.id}', '${reply.id}')" class="text-xs font-bold ${replyLiked ? 'text-gold-600' : 'text-slate-500 hover:text-gold-600'}" ${replyLiked ? 'aria-pressed="true"' : 'aria-pressed="false"'}>👍 ${reply.likes || 0}</button>
+                        </div>
+                        <p class="mt-1 text-sm text-slate-700 leading-relaxed">${escapeHtml(reply.content || '')}</p>
+                    </div>`;
+            }).join('');
+            return `
+                <div class="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-right">
+                    <div class="flex justify-between items-center gap-3 mb-2">
+                        <button onclick="window.likeQuizComment('${comment.id}')" class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-xs font-bold ${liked ? 'text-gold-600' : 'text-emerald-800 hover:text-gold-600'}" ${liked ? 'aria-pressed="true"' : 'aria-pressed="false"'}>👍 أعجبني (${likes})</button>
+                        <div class="text-right">
+                            <div class="text-sm font-bold text-emerald-900">${escapeHtml(comment.author || 'زائر')}</div>
+                            <div class="text-[11px] text-gold-600">${escapeHtml(badge)}</div>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-700 leading-relaxed">${escapeHtml(comment.content || '')}</p>
+                    <div class="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>${escapeHtml(dateStr)}</span>
+                        <button onclick="window.toggleQuizReplyBox('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">رد</button>
+                    </div>
+                    <div id="quiz-reply-box-${comment.id}" class="hidden mt-3 border-t border-emerald-100 pt-3">
+                        <textarea id="quiz-reply-input-${comment.id}" rows="2" placeholder="اكتب ردك..." class="w-full resize-none rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm focus:outline-none focus:border-gold-500"></textarea>
+                        <button onclick="window.submitQuizCommentReply('${comment.id}')" class="mt-2 bg-emerald-900 px-3 py-1.5 text-xs font-bold text-gold-500 hover:bg-emerald-800">إرسال الرد</button>
+                    </div>
+                    ${replies ? `<div class="mt-3 space-y-2">${replies}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const authorSelect = document.getElementById('quiz-comment-author-select');
+        if (authorSelect) {
+            authorSelect.addEventListener('change', function() {
+                const secretInput = document.getElementById('quiz-comment-secret-input');
+                const needsSecret = this.value === 'developer' || this.value === 'owner';
+                if (secretInput) {
+                    secretInput.classList.toggle('hidden', !needsSecret);
+                    if (!needsSecret) secretInput.value = '';
+                }
+            });
+        }
+    });
+
+    function setQuizMode(mode) {
+        quizMode = mode;
+        document.getElementById('quiz-player-two-wrap').classList.toggle('hidden', mode !== 'duel');
+        document.getElementById('quiz-solo-mode').className = mode === 'solo' ? 'bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500' : 'border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900';
+        document.getElementById('quiz-duel-mode').className = mode === 'duel' ? 'bg-emerald-900 px-4 py-2 text-xs font-bold text-gold-500' : 'border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-900';
+    }
+
+    function updateQuizScore() {
+        const label = document.getElementById('quiz-score-label');
+        if (quizMode === 'duel') {
+            label.innerHTML = `دور: <span class="text-emerald-700 font-bold">${escapeHtml(quizPlayers[activeQuizPlayer])}</span> | ${escapeHtml(quizPlayers[0])}: <span class="text-emerald-700 font-bold">${quizScores[0]}</span> - ${escapeHtml(quizPlayers[1])}: <span class="text-emerald-700 font-bold">${quizScores[1]}</span>`;
+        } else {
+            label.innerHTML = `النقاط الحالية: <span id="quiz-score" class="text-emerald-700 font-bold">${userScore}</span>`;
+        }
+    }
+
     function startQuiz(type) {
+        const playerOneInput = document.getElementById('quiz-player-one');
+        const playerTwoInput = document.getElementById('quiz-player-two');
+        const playerOne = playerOneInput.value.trim();
+        const playerTwo = playerTwoInput.value.trim();
+        if (!playerOne) return alert('اكتب اسم اللاعب أولاً.');
+        if (quizMode === 'duel' && !playerTwo) return alert('اكتب اسم اللاعب الثاني لبدء التحدي.');
+
         document.getElementById('quiz-result-box').classList.add('hidden');
-        currentQuestionsList = [...quizDatabase[type]].sort(() => Math.random() - 0.5);
+        const questionBank = type === 'all' ? [...quizDatabase.quran, ...quizDatabase.history] : quizDatabase[type];
+        currentQuestionsList = [...questionBank].sort(() => Math.random() - 0.5);
         currentQuestionIdx = 0;
         userScore = 0;
+        quizPlayers = quizMode === 'duel' ? [playerOne, playerTwo] : [playerOne];
+        quizScores = quizPlayers.map(() => 0);
+        activeQuizPlayer = 0;
 
-        applyQuizTheme(type);
-        document.getElementById('quiz-type-title').innerText = type === 'quran' ? "🥇 مسابقة القرآن الكريم" : "🏛️ مسابقة التاريخ الإسلامي";
-        document.getElementById('quiz-score').innerText = userScore;
+        applyQuizTheme(type === 'history' ? 'history' : 'quran');
+        const title = type === 'quran' ? '🥇 مسابقة القرآن الكريم' : type === 'history' ? '🏛️ مسابقة التاريخ الإسلامي' : '🏆 التحدي الشامل: 500 سؤال';
+        document.getElementById('quiz-type-title').innerText = `${title} | ${quizPlayers.join(' ضد ')}`;
+        updateQuizScore();
         document.getElementById('quiz-game-box').classList.remove('hidden');
         showQuestion();
     }
@@ -1696,7 +1992,8 @@
 
         if(selectedIdx === currentQ.a) {
             userScore++;
-            document.getElementById('quiz-score').innerText = userScore;
+            quizScores[activeQuizPlayer]++;
+            updateQuizScore();
             clickedBtn.className = "w-full p-4 text-right rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold text-sm flex items-center justify-between";
         } else {
             clickedBtn.className = "w-full p-4 text-right rounded-xl border-2 border-red-500 bg-red-50 text-red-900 font-bold text-sm flex items-center justify-between";
@@ -1708,10 +2005,25 @@
 
     function nextQuestion() {
         currentQuestionIdx++;
-        if(currentQuestionIdx < currentQuestionsList.length) showQuestion();
+        if(currentQuestionIdx < currentQuestionsList.length) {
+            if (quizMode === 'duel') activeQuizPlayer = activeQuizPlayer === 0 ? 1 : 0;
+            updateQuizScore();
+            showQuestion();
+        }
         else {
             document.getElementById('quiz-game-box').classList.add('hidden');
             document.getElementById('final-score-text').innerText = `${userScore} / ${currentQuestionsList.length}`;
+            const winnerText = document.getElementById('quiz-winner-text');
+            if (quizMode === 'duel') {
+                if (quizScores[0] === quizScores[1]) {
+                    winnerText.textContent = `تعادل رائع بين ${quizPlayers[0]} و${quizPlayers[1]} بنتيجة ${quizScores[0]} لكلٍ منهما.`;
+                } else {
+                    const winnerIndex = quizScores[0] > quizScores[1] ? 0 : 1;
+                    winnerText.textContent = `الفائز هو ${quizPlayers[winnerIndex]} بنتيجة ${quizScores[winnerIndex]} مقابل ${quizScores[1 - winnerIndex]}.`;
+                }
+            } else {
+                winnerText.textContent = `أحسنت يا ${quizPlayers[0]}، لقد حصلت على ${userScore} نقطة.`;
+            }
             document.getElementById('quiz-result-box').classList.remove('hidden');
         }
     }
