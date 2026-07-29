@@ -238,8 +238,7 @@
             }
         };
 
-        window.updateQuizCommentAsOwner = async function(commentId, content, secret) {
-            if (secret !== QUIZ_OWNER_SECRET) throw new Error('كلمة سر المالك غير صحيحة.');
+        window.updateQuizCommentAsOwner = async function(commentId, content) {
             if (!content) throw new Error('لا يمكن حفظ تعليق فارغ.');
             await updateDoc(doc(db, 'quiz_comments', commentId), {
                 content,
@@ -1931,13 +1930,11 @@
     window.editQuizCommentAsOwner = async function(commentId) {
         const comment = (window.allFirebaseQuizComments || []).find(item => item.id === commentId);
         if (!comment) return;
-        const secret = prompt('أدخل كلمة سر المالك لتعديل التعليق:');
-        if (secret === null) return;
         const content = prompt('عدّل نص التعليق:', comment.content || '');
         if (content === null) return;
 
         try {
-            await window.updateQuizCommentAsOwner(commentId, content.trim(), secret.trim());
+            await window.updateQuizCommentAsOwner(commentId, content.trim());
             alert('تم تعديل التعليق بنجاح.');
         } catch (error) {
             console.error('فشل تعديل تعليق المسابقة:', error);
