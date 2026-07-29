@@ -333,6 +333,20 @@
             }
         }
 
+        window.updateArticleAsOwner = async function(id, title, content, secret) {
+            if (secret !== '3092004') {
+                throw new Error('كلمة السر غير صحيحة.');
+            }
+            if (!title || !content) {
+                throw new Error('يرجى كتابة عنوان المقال ومحتواه.');
+            }
+            await updateDoc(doc(db, 'articles', id), {
+                title,
+                content,
+                updatedAt: Date.now()
+            });
+        };
+
         // الاستماع اللحظي للأسئلة
         const qQuestions = query(collection(db, "questions"), orderBy("timestamp", "asc"));
         onSnapshot(qQuestions, (snapshot) => {
@@ -642,7 +656,10 @@
             <div class="bg-white w-full max-w-2xl h-[75vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-emerald-100 scale-90 transition-transform duration-300">
                 <div class="bg-emerald-900 p-4 text-white flex justify-between items-center">
                     <h3 id="read-modal-title" class="text-lg font-bold text-gold-500">عنوان المقال</h3>
-                    <button onclick="closeArticleModal()" class="text-white hover:text-gold-500 text-2xl font-bold transition-colors">&times;</button>
+                    <div class="flex items-center gap-3">
+                        <button onclick="window.openArticleEditModal()" class="text-xs font-bold text-gold-500 hover:text-white transition-colors">تعديل</button>
+                        <button onclick="closeArticleModal()" class="text-white hover:text-gold-500 text-2xl font-bold transition-colors" aria-label="إغلاق">&times;</button>
+                    </div>
                 </div>
                 <div class="p-3 bg-emerald-50/60 border-b border-emerald-100 flex justify-between text-xs text-slate-500 px-6">
                     <span id="read-modal-author">الكاتب: </span>
@@ -655,6 +672,22 @@
                     <button onclick="window.submitArticleComment()" class="mt-2 px-4 py-2 rounded-full bg-emerald-900 text-gold-500 font-bold text-xs hover:bg-emerald-800 transition-colors">نشر التعليق</button>
                     <div id="article-comments-list" class="mt-4 space-y-2 max-h-48 overflow-y-auto"></div>
                 </div>
+            </div>
+        </div>
+
+        <div id="article-edit-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div class="w-full max-w-2xl border border-emerald-100 bg-white p-6 shadow-2xl">
+                <div class="mb-4 flex items-center justify-between gap-4">
+                    <h3 class="text-lg font-bold text-emerald-900">تعديل المقال</h3>
+                    <button onclick="window.closeArticleEditModal()" class="text-2xl font-bold text-slate-500 hover:text-emerald-900" aria-label="إغلاق">&times;</button>
+                </div>
+                <label for="article-edit-title" class="mb-1 block text-xs font-bold text-emerald-900">العنوان</label>
+                <input id="article-edit-title" type="text" class="mb-4 w-full border border-emerald-100 px-3 py-2 text-sm focus:outline-none focus:border-gold-500">
+                <label for="article-edit-content" class="mb-1 block text-xs font-bold text-emerald-900">المحتوى</label>
+                <textarea id="article-edit-content" rows="12" class="mb-4 w-full resize-y border border-emerald-100 px-3 py-2 text-sm leading-relaxed focus:outline-none focus:border-gold-500"></textarea>
+                <label for="article-edit-secret" class="mb-1 block text-xs font-bold text-emerald-900">كلمة سر المالك</label>
+                <input id="article-edit-secret" type="password" inputmode="numeric" class="w-full border border-emerald-100 px-3 py-2 text-sm focus:outline-none focus:border-gold-500">
+                <button onclick="window.saveArticleEdit()" class="mt-4 bg-emerald-900 px-4 py-2 text-sm font-bold text-gold-500 hover:bg-emerald-800">حفظ التعديلات</button>
             </div>
         </div>
     </main>
@@ -1847,6 +1880,39 @@
     window.closeArticleModal = function() {
         document.getElementById('article-read-modal').classList.add('hidden');
     }
+
+    window.openArticleEditModal = function() {
+        const article = (window.allFirebaseArticles || []).find(item => item.id === window.currentArticleId);
+        if (!article) return;
+        document.getElementById('article-edit-title').value = article.title || '';
+        document.getElementById('article-edit-content').value = article.content || '';
+        document.getElementById('article-edit-secret').value = '';
+        const modal = document.getElementById('article-edit-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    };
+
+    window.closeArticleEditModal = function() {
+        document.getElementById('article-edit-modal').classList.add('hidden');
+    };
+
+    window.saveArticleEdit = async function() {
+        const title = document.getElementById('article-edit-title').value.trim();
+        const content = document.getElementById('article-edit-content').value.trim();
+        const secret = document.getElementById('article-edit-secret').value.trim();
+        if (!window.currentArticleId) return;
+
+        try {
+            await window.updateArticleAsOwner(window.currentArticleId, title, content, secret);
+            document.getElementById('read-modal-title').innerText = title;
+            document.getElementById('read-modal-content').innerText = content;
+            window.closeArticleEditModal();
+            alert('تم تعديل المقال بنجاح.');
+        } catch (error) {
+            console.error('فشل تعديل المقال:', error);
+            alert(error.message || 'فشل حفظ التعديلات.');
+        }
+    };
 
         window.renderQuizComments = function() {
         const list = document.getElementById('quiz-comments-list');
