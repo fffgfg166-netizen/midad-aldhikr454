@@ -83,6 +83,22 @@
         .animate-float { animation: subtle-float 6s ease-in-out infinite; }
         .animate-spark { animation: golden-spark 2.8s ease-in-out infinite; }
         .animate-fade-in { animation: fadeInUp 0.8s ease-out forwards; }
+        .comments-scroll-area {
+            scrollbar-width: thin;
+            scrollbar-color: #d4af37 #0f172a;
+        }
+        .comments-scroll-area::-webkit-scrollbar { width: 10px; }
+        .comments-scroll-area::-webkit-scrollbar-track { background: #0f172a; border-radius: 999px; }
+        .comments-scroll-area::-webkit-scrollbar-thumb { background: #d4af37; border: 2px solid #0f172a; border-radius: 999px; }
+        .comments-scroll-area::-webkit-scrollbar-thumb:hover { background: #f4cf5a; }
+        /* نافذة المقال: مساحة مريحة للقراءة مع إبقاء التعليقات ظاهرة ومنظمة. */
+        .article-reader-layout { min-height: 0; overflow-y: auto; }
+        .article-reader-content { min-height: 18rem; }
+        .article-comments-panel { min-height: 34rem; }
+        @media (min-width: 1024px) {
+            .article-reader-layout { grid-template-columns: minmax(0, 1.7fr) minmax(22rem, .9fr) !important; overflow: hidden; }
+            .article-comments-panel { min-height: 0; border-right: 1px solid #334155; }
+        }
     </style>
 
     <script type="module">
@@ -185,21 +201,32 @@
 
         window.submitArticleComment = async function(articleId = window.currentArticleId) {
             const input = document.getElementById('article-comment-input');
+            const authorSelect = document.getElementById('article-comment-author-select');
+            const secretInput = document.getElementById('article-comment-secret-input');
             const commentText = input ? input.value.trim() : '';
+            const role = authorSelect ? authorSelect.value : 'visitor';
+            const secret = secretInput ? secretInput.value.trim() : '';
 
             if (!articleId) return;
             if (!commentText) return alert("يرجى كتابة تعليقك أولاً!");
 
+            let author = 'زائر';
+            if (role === 'developer' || role === 'owner') {
+                if (secret !== QUIZ_OWNER_SECRET) return alert('كلمة السر غير صحيحة.');
+                author = role === 'developer' ? 'المطور' : 'مالك الموقع';
+            }
+
             try {
                 await addDoc(collection(db, "article_comments"), {
                     articleId: articleId,
-                    author: 'زائر',
+                    author,
                     content: commentText,
                     timestamp: Date.now(),
                     replies: [],
                     userId: window.visitorSecretId
                 });
                 if (input) input.value = '';
+                if (secretInput) secretInput.value = '';
                 if (typeof window.renderArticleComments === 'function') window.renderArticleComments(articleId);
             } catch (error) {
                 console.error("خطأ أثناء نشر التعليق:", error);
@@ -276,14 +303,24 @@
 
         window.submitArticleCommentReply = async function(commentId) {
             const input = document.getElementById(`article-reply-input-${commentId}`);
+            const roleSelect = document.getElementById(`article-reply-role-${commentId}`);
+            const secretInput = document.getElementById(`article-reply-secret-${commentId}`);
             const content = input ? input.value.trim() : '';
             if (!content) return alert('يرجى كتابة الرد أولاً.');
+
+            const role = roleSelect ? roleSelect.value : 'visitor';
+            const secret = secretInput ? secretInput.value.trim() : '';
+            let author = 'زائر';
+            if (role === 'developer' || role === 'owner') {
+                if (secret !== QUIZ_OWNER_SECRET) return alert('كلمة السر غير صحيحة.');
+                author = role === 'developer' ? 'المطور' : 'مالك الموقع';
+            }
 
             const comment = (window.allFirebaseArticleComments || []).find(item => item.id === commentId);
             if (!comment) return;
             const reply = {
                 id: `article_reply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                author: 'زائر',
+                author,
                 content,
                 timestamp: Date.now(),
                 userId: window.visitorSecretId
@@ -293,6 +330,7 @@
                 replies: [...(comment.replies || []), reply]
             });
             input.value = '';
+            if (secretInput) secretInput.value = '';
         };
 
         window.toggleArticleReplyForm = function(commentId) {
@@ -530,8 +568,8 @@
     </div>
 
     <!-- قسم الزوار الديناميكي المميز بجانب لوحة المطور -->
-    <div id="visitor-magic-box" class="fixed bottom-28 right-6 z-[998] pointer-events-none animate-fade-in">
-        <div class="relative overflow-hidden rounded-3xl border border-gold-500/40 bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-950 text-white p-5 shadow-2xl backdrop-blur-xl pointer-events-auto max-w-xs">
+    <div id="visitor-magic-box" class="container mx-auto animate-fade-in px-4 pt-5">
+        <div class="relative mr-auto max-w-md overflow-hidden rounded-3xl border border-gold-500/40 bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-950 p-5 text-white shadow-2xl backdrop-blur-xl">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.35),_transparent_32%)]"></div>
             <div class="absolute -right-6 top-4 w-24 h-24 rounded-full bg-gold-500/20 blur-2xl animate-spark"></div>
             <div class="relative z-10">
@@ -757,24 +795,44 @@
 
         <!-- مودال قراءة المقال الكاملة -->
         <div id="article-read-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50 backdrop-blur-sm transition-opacity duration-300">
-            <div class="bg-black w-full max-w-3xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700 scale-90 transition-transform duration-300">
-                <div class="bg-emerald-900 p-5 text-white flex justify-between items-center">
-                    <h3 id="read-modal-title" class="text-lg font-bold text-gold-500">عنوان المقال</h3>
+            <div class="bg-black w-full max-w-7xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700 scale-90 transition-transform duration-300">
+                <div class="bg-emerald-900 px-5 py-4 text-white flex justify-between items-center gap-4 shrink-0">
+                    <h3 id="read-modal-title" class="text-xl md:text-2xl font-bold text-gold-500 leading-relaxed">عنوان المقال</h3>
                     <div class="flex items-center gap-3">
                         <button onclick="window.openArticleEditModal()" class="text-xs font-bold text-gold-500 hover:text-white transition-colors">تعديل</button>
                         <button onclick="closeArticleModal()" class="text-white hover:text-gold-500 text-2xl font-bold transition-colors" aria-label="إغلاق">&times;</button>
                     </div>
                 </div>
-                <div class="p-3 bg-slate-900 border-b border-slate-700 flex justify-between text-sm text-slate-300 px-6">
+                <div class="shrink-0 py-3 bg-slate-900 border-b border-slate-700 flex flex-wrap justify-between gap-2 text-sm text-slate-300 px-6">
                     <span id="read-modal-author">الكاتب: </span>
                     <span id="read-modal-date">التاريخ: </span>
                 </div>
-                <div id="read-modal-content" class="m-4 overflow-y-auto flex-1 rounded-xl border border-slate-700 bg-slate-950 p-6 text-base font-medium leading-8 text-white whitespace-pre-line text-right Amiri"></div>
-                <div class="p-4 border-t border-slate-700 bg-black">
-                    <h4 class="text-sm font-bold text-gold-500 mb-3">💬 تعليقات الزوار</h4>
-                    <textarea id="article-comment-input" rows="3" placeholder="اكتب تعليقك هنا وسيتاح لجميع الزوار رؤيته..." class="w-full px-3 py-2 text-sm text-white border border-slate-600 rounded-xl focus:outline-none focus:border-gold-500 bg-slate-950 placeholder:text-slate-400 resize-none"></textarea>
-                    <button onclick="window.submitArticleComment()" class="mt-2 px-4 py-2 rounded-full bg-emerald-900 text-gold-500 font-bold text-xs hover:bg-emerald-800 transition-colors">نشر التعليق</button>
-                    <div id="article-comments-list" class="mt-4 space-y-3 max-h-96 overflow-y-auto"></div>
+                <div class="article-reader-layout grid flex-1 overflow-hidden lg:grid-cols-2">
+                    <section class="flex min-h-0 flex-col p-4 md:p-6">
+                        <div class="mb-3 flex items-center gap-2 text-xs font-bold text-gold-500"><span>📖</span><span>نص المقال كاملاً</span></div>
+                        <div id="read-modal-content" class="article-reader-content flex-1 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-5 md:p-8 text-base md:text-lg font-medium leading-9 text-white whitespace-pre-line text-right quran-text"></div>
+                    </section>
+                    <aside class="article-comments-panel flex min-h-0 flex-col bg-black p-4 md:p-5 lg:border-r lg:border-slate-700">
+                        <div class="flex items-center justify-between gap-3">
+                            <h4 class="text-base font-bold text-gold-500">💬 تعليقات الزوار</h4>
+                            <span class="text-[11px] text-slate-400">شارك برأيك أو رد على تعليق</span>
+                        </div>
+                        <textarea id="article-comment-input" rows="3" placeholder="اكتب تعليقك هنا وسيتاح لجميع الزوار رؤيته..." class="mt-3 w-full px-3 py-2 text-sm text-white border border-slate-600 rounded-xl focus:outline-none focus:border-gold-500 bg-slate-950 placeholder:text-slate-400 resize-y"></textarea>
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <select id="article-comment-author-select" onchange="document.getElementById('article-comment-secret-input').classList.toggle('hidden', this.value === 'visitor')" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-white focus:outline-none focus:border-gold-500">
+                                <option value="visitor">تعليق كزائر</option>
+                                <option value="developer">تعليق كمطور</option>
+                                <option value="owner">تعليق كمالك الموقع</option>
+                            </select>
+                            <input id="article-comment-secret-input" type="password" inputmode="numeric" placeholder="كلمة السر" class="hidden rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-gold-500">
+                        </div>
+                        <button onclick="window.submitArticleComment()" class="mt-2 w-full rounded-xl bg-emerald-900 px-4 py-2.5 font-bold text-gold-500 text-sm hover:bg-emerald-800 transition-colors">نشر التعليق</button>
+                        <div class="mt-4 flex items-center justify-between text-xs text-slate-300"><span>التعليقات والردود</span><span class="text-gold-500">مرر لعرض المزيد</span></div>
+                        <div class="relative mt-2 flex-1 min-h-0">
+                            <div id="article-comments-scroll-track" class="pointer-events-none absolute bottom-3 left-2 top-3 hidden w-1.5 rounded-full bg-slate-700"><div id="article-comments-scroll-thumb" class="absolute left-0 w-full rounded-full bg-gold-500 shadow-[0_0_8px_rgba(212,175,55,.8)]"></div></div>
+                            <div id="article-comments-list" tabindex="0" aria-label="قائمة تعليقات وردود المقال" class="comments-scroll-area space-y-3 h-full overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/60 p-3 pl-6"></div>
+                        </div>
+                    </aside>
                 </div>
             </div>
         </div>
@@ -2094,6 +2152,28 @@
         }
     };
 
+    window.updateArticleCommentsScrollIndicator = function() {
+        const list = document.getElementById('article-comments-list');
+        const track = document.getElementById('article-comments-scroll-track');
+        const thumb = document.getElementById('article-comments-scroll-thumb');
+        if (!list || !track || !thumb) return;
+
+        const update = () => {
+            const maxScroll = list.scrollHeight - list.clientHeight;
+            const hasMore = maxScroll > 1;
+            track.classList.toggle('hidden', !hasMore);
+            if (!hasMore) return;
+
+            const thumbHeight = Math.max(18, (list.clientHeight / list.scrollHeight) * 100);
+            const top = (list.scrollTop / maxScroll) * (100 - thumbHeight);
+            thumb.style.height = `${thumbHeight}%`;
+            thumb.style.top = `${top}%`;
+        };
+
+        list.onscroll = update;
+        requestAnimationFrame(update);
+    };
+
     window.renderArticleComments = function(articleId) {
         const list = document.getElementById('article-comments-list');
         if (!list) return;
@@ -2104,6 +2184,7 @@
 
         if (!comments.length) {
             list.innerHTML = '<div class="text-xs text-slate-400">لا توجد تعليقات بعد. كن أول من يعلق.</div>';
+            window.updateArticleCommentsScrollIndicator();
             return;
         }
 
@@ -2124,7 +2205,7 @@
                     </div>
                     <p class="text-sm text-slate-700 leading-relaxed">${escapeHtml(comment.content || '')}</p>
                     <div class="mt-2 flex items-center gap-3 text-[11px]">
-                        <button onclick="window.toggleArticleReplyForm('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">رد</button>
+                        <button onclick="window.toggleArticleReplyForm('${comment.id}')" class="rounded-full bg-emerald-900 px-3 py-1.5 font-bold text-gold-500 hover:bg-emerald-800">💬 رد على التعليق</button>
                         ${replyCount ? `<button id="article-replies-toggle-${comment.id}" onclick="window.toggleArticleReplies('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">عرض الردود (${replyCount})</button>` : ''}
                         <button onclick="window.editArticleComment('${comment.id}')" class="font-bold text-emerald-800 hover:text-gold-600">تعديل</button>
                         <button onclick="window.requestDeleteArticleComment('${comment.id}')" class="font-bold text-slate-500 hover:text-red-600">حذف</button>
@@ -2132,12 +2213,21 @@
                     <div id="article-reply-form-${comment.id}" class="hidden mt-4 rounded-xl border border-slate-700 bg-black p-4 shadow-inner">
                         <label for="article-reply-input-${comment.id}" class="mb-2 block text-sm font-bold text-white">اكتب ردك</label>
                         <textarea id="article-reply-input-${comment.id}" dir="rtl" rows="6" placeholder="اكتب ردك على هذا التعليق..." aria-label="اكتب ردك على التعليق" class="min-h-32 w-full cursor-text resize-y rounded-lg border border-slate-500 bg-slate-950 px-4 py-3 text-base font-medium leading-7 text-white caret-white placeholder:text-slate-300 focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/40"></textarea>
-                        <button onclick="window.submitArticleCommentReply('${comment.id}')" class="mt-3 w-full rounded-lg bg-emerald-900 px-4 py-3 text-sm font-bold text-gold-500 hover:bg-emerald-800">نشر الرد</button>
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <select id="article-reply-role-${comment.id}" onchange="document.getElementById('article-reply-secret-${comment.id}').classList.toggle('hidden', this.value === 'visitor')" class="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-white focus:outline-none focus:border-gold-500">
+                                <option value="visitor">رد كزائر</option>
+                                <option value="developer">رد كمطور</option>
+                                <option value="owner">رد كمالك الموقع</option>
+                            </select>
+                            <input id="article-reply-secret-${comment.id}" type="password" inputmode="numeric" placeholder="كلمة السر" class="hidden rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-gold-500">
+                        </div>
+                        <button onclick="window.submitArticleCommentReply('${comment.id}')" class="mt-3 w-full rounded-lg bg-emerald-900 px-4 py-3 text-sm font-bold text-gold-500 hover:bg-emerald-800">✉ إرسال الرد</button>
                     </div>
                     ${replies ? `<div id="article-replies-${comment.id}" data-count="${replyCount}" class="hidden mt-3 space-y-2">${replies}</div>` : ''}
                 </div>
             `;
         }).join('');
+        window.updateArticleCommentsScrollIndicator();
     };
 
     window.openArticleFullModal = function(id) {
@@ -2155,10 +2245,14 @@
         const modal = document.getElementById('article-read-modal');
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        modal.firstElementChild.classList.remove('scale-90');
     }
 
     window.closeArticleModal = function() {
-        document.getElementById('article-read-modal').classList.add('hidden');
+        const modal = document.getElementById('article-read-modal');
+        modal.firstElementChild.classList.add('scale-90');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
     }
 
     window.openArticleEditModal = function() {
